@@ -19,7 +19,7 @@ Use a synthetic submission with its own recording ID; never reuse a reserved cor
 1. Open one labelled public sample with real audio and a tested timestamp source; show a refusal for a question without evidence.
 2. Show contributor consent, recording/transcript review and a private pending submission. Label a stub transcript as a stub; only call transcription real after a real service run is recorded.
 3. A separate reviewer approves it. A clean guest session can now find and play the approved public story.
-4. Withdraw it. Demonstrate its removal from guest catalog/map/Ask and old audio access, plus the correct contributor state. Do not claim the current P2 is repaired before a new tested SHA.
+4. Withdraw it. Demonstrate its removal from guest catalog/map/Ask and old audio access, plus the correct contributor state. The saved-override repair has local evidence on e038d82; demonstrate it against the named integrated/deployed candidate before making a hosted claim.
 5. Show local Ask a Story -> recorder handoff as a separate optional interaction. Describe its local-only scope.
 6. A consent-cleared interview excerpt or optional media can enrich the presentation after source/use review. An unavailable-media state must remain honest; a fallback screenshot does not prove successful playback.
 

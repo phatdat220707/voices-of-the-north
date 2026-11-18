@@ -11,6 +11,7 @@ Voices of the North is a prototype for preserving Hong Kong community oral histo
 - [Verified demo behavior and test checklist](docs/techathon/DEMO-EVIDENCE.md)
 - [Deployment verification and remaining handoff](docs/techathon/DEPLOYMENT.md)
 - [Staging budget/access options — pending approval](docs/techathon/BUDGET-AND-ACCESS.md)
+- [Continue with free/local resources before spending](docs/techathon/FREE-FIRST-STAGING.md)
 - [Product/demo scope and Douglas PRD review](docs/techathon/PRODUCT-SCOPE.md)
 - [Deployed acceptance cases and release decision](docs/techathon/RELEASE-ACCEPTANCE.md)
 - [Work items, independent first steps, and handoffs](docs/techathon/WORK-ITEMS.md)

@@ -8,12 +8,13 @@ Updated 18 November 2026. Read [STATUS.md](STATUS.md) for the exact review candi
 - One Render FastAPI service serves frontend/API on the same origin. Private audio lives on a Render persistent disk behind the authorized API. Supabase PostgreSQL is the staging database. SQLite remains a local/demo fallback, not an accepted hosted substitute. Supabase Auth and Storage buckets are outside this round.
 - The proposed bill in the [architecture handoff](https://github.com/phatdat220707/voices-of-the-north/pull/15#issuecomment-6945928339) is an estimate requiring current pricing and Dat's approval. No purchase, subscription or account change is authorized here.
 - The original $32.25/month estimate supports a single Render Hobby operator. Separate Dat/Zheng workspace access adds a Pro workspace, yielding a $57.25/month base estimate before exclusions. Choose explicitly from [budget/access options](BUDGET-AND-ACCESS.md); do not share account credentials to avoid the Hobby seat limit.
+- Local implementation/review can continue before buying hosting. Use [free-first capability limits](FREE-FIRST-STAGING.md) to identify the minimum missing capability; neither the $32.25 nor $57.25 proposal is automatically required. A free Render filesystem cannot satisfy private-upload restart durability.
 
 ## Current boundary
 
 PR #15 is not merged; OIDC/invite enforcement still needs implementation. Local signed demo identities and adapter checks do not establish invited onboarding, hosted PostgreSQL/RLS, storage isolation or recovery.
 
-The last team-confirmed production check was Nov 16 at `a6b932a`. Main has since changed. No separately verified staging URL/deployed SHA is recorded; never present the current main SHA as a live version without checking. The Nov 19-20 staging dates were conditional targets whose prerequisites were not met; Zheng supplies revised dates after backend scope, access and budget are confirmed. Issue #3's existing Nov 30 acceptance date remains unless Dat changes it.
+The last team-confirmed production dashboard check was Nov 16 at `a6b932a`. A later read-only public check at 23:02 HKT on Nov 18 found frontend HTML matching main `3f23a55`, not PR #15's new e038d82. Health returned OK and reported storage/STT ready, LLM not ready. This does not identify the backend deployed SHA, tier, disk, actual STT result or authorization acceptance. No separate staging URL/deployed backend SHA is verified. The Nov 19-20 dates were conditional targets; Zheng supplies revised dates after scope/access and any necessary budget decision. Issue #3's Nov 30 acceptance date remains unless Dat changes it.
 
 ## Configure staging explicitly
 

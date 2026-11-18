@@ -1,6 +1,6 @@
 # Deployed candidate acceptance and release decision
 
-Prepared by Dat, **18 November 2026**, for Issues #3-6 and #8. This is a ready-to-run plan. **Every hosted case below is NOT RUN until evidence for the deployed SHA is attached.** The 541 passing local assertions and known scope-override P2 are recorded separately in [STATUS.md](STATUS.md).
+Prepared by Dat, **18 November 2026**, for Issues #3-6 and #8. This is a ready-to-run plan. **Every hosted case below is NOT RUN until evidence for the deployed SHA is attached.** The earlier 541-check candidate and latest e038d82 rerun (560 existing assertions plus 10 independent override cases, passing) are recorded separately in [STATUS.md](STATUS.md). Local success does not fill these hosted rows.
 
 ## Candidate record
 
@@ -73,6 +73,6 @@ Record the observed data-loss window and service recovery time; Dat accepts or r
 
 - Recording release: **NOT APPROVED**.
 - Read-only public release: **not automatically approved**; assess its visibility and failure behavior separately if contribution gates remain incomplete.
-- Open defects: saved sharing-override P2 on e90d7f7; new candidate review and hosted cases above pending.
+- Revision-specific defect status: the saved sharing-override P2 on e90d7f7 is repaired in e038d82 for the independently tested local paths. Zheng's exact-head re-review, integrated browser acceptance and hosted cases above remain pending.
 - Takedown/error coordination: Dat. Service operation: Zheng. Backend repair/support: Boris. UI: Steven. Public claims/deck: Douglas.
 - Decision requires the named deployed SHA, the completed evidence matrix, unresolved-defect disposition and Dat's recorded approval. Passing a local suite, a healthy service or a GitHub merge alone is insufficient.

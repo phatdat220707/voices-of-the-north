@@ -2,6 +2,8 @@
 
 Prepared for Dat on **18 November 2026 (HKT)**. **Proposal only: no spending, account creation, permission grant or service activation is approved by this document.** Ref: Issue #3 and the agreed staging direction in [STATUS.md](STATUS.md).
 
+**Next step after Dat's cost clarification:** continue local/existing-resource work first. Read [free-first staging limits and lower-cost paths](FREE-FIRST-STAGING.md) before treating either paid configuration below as necessary. Supabase Pro and a multi-member Render workspace are optional paid capabilities, not prerequisites for continuing engineering. No budget choice is required to fix/review code now.
+
 ## What changes the earlier estimate
 
 The proposed US$32.25/month stack is arithmetically consistent for a **single Render workspace operator**. Hobby allows one member; separate Dat and Zheng dashboard accounts need Pro or higher. Never solve the seat limit by sharing a password or a personal access token. [Render plan limits](https://render.com/docs/platform-features-by-plan), [workspace roles](https://render.com/docs/team-members).
@@ -20,7 +22,7 @@ Estimates below assume one new staging service, one 1GB audio disk, one Supabase
 
 Render compute/disk amounts: [pricing](https://render.com/pricing). Pro workspace price: [official plan change](https://render.com/changelog/updated-plans-for-render-workspaces). Supabase includes enough compute credit for one Micro project on Pro: [pricing](https://supabase.com/pricing). Confirm the actual dashboard quote before provisioning; a second paid project changes the arithmetic.
 
-**Recommendation:** choose B if Dat must retain direct dashboard oversight while Zheng independently operates staging. A is a lower-cost alternative only if Dat explicitly accepts one named workspace operator and a documented ownership/recovery handoff. Neither option is selected yet.
+**Conditional choice, when paid hosting is justified:** B supports Dat and Zheng dashboard membership. A has one named operator and needs an explicit ownership/recovery arrangement. The free-first plan also describes a $7.25 base alternative using Supabase Free if a project is available and its pause/manual-backup limits are accepted. No configuration is selected, and separate dashboard membership is not a product feature requirement.
 
 These are base estimates, not guaranteed maximum bills. Taxes, currency/card fees, bandwidth/build overages, external backup storage, real Google STT/other AI usage, extra projects, larger compute and paid add-ons are excluded. No extra subscription or upgrade is in scope without another decision. A first billing-cycle trial and its review/renewal date should be recorded before activation; automatic renewal has not been approved here.
 
