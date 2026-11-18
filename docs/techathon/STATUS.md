@@ -8,6 +8,8 @@ Last reconciled: **18 November 2026 (HKT)**. This is a dated handoff snapshot, n
 2. Read [AGENTS.md](../../AGENTS.md), the [shared flow](DEMO-FLOW.md), and the relevant code.
 3. Work on your branch, give the reviewer a SHA and test steps, then notify Dat after the handoff. Dat merges reviewed PRs; a merge is not a recording-release approval.
 
+Dat's next handoff is prepared: [budget/access decision](BUDGET-AND-ACCESS.md), [product/demo scope and historical-map review](PRODUCT-SCOPE.md), and [26 deployed acceptance cases](RELEASE-ACCEPTANCE.md). Budget choice, actual platform access and hosted sign-off remain pending; these documents do not activate a service or authorize new map implementation.
+
 ## Repository and review state
 
 - `main` at this audit: [`3f23a55`](https://github.com/phatdat220707/voices-of-the-north/commit/3f23a55da85eb390b7501a19ce6b2d56631b60c9).

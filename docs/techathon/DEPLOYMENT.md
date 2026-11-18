@@ -7,6 +7,7 @@ Updated 18 November 2026. Read [STATUS.md](STATUS.md) for the exact review candi
 - Zheng/Boxuan owns Google OIDC implementation, invite/role enforcement, deployment/configuration, and the deployed-SHA record. Boris supports backend/schema, samples and acceptance. Dat coordinates reviewed merges, approves costs and makes the recording-release decision.
 - One Render FastAPI service serves frontend/API on the same origin. Private audio lives on a Render persistent disk behind the authorized API. Supabase PostgreSQL is the staging database. SQLite remains a local/demo fallback, not an accepted hosted substitute. Supabase Auth and Storage buckets are outside this round.
 - The proposed bill in the [architecture handoff](https://github.com/phatdat220707/voices-of-the-north/pull/15#issuecomment-6945928339) is an estimate requiring current pricing and Dat's approval. No purchase, subscription or account change is authorized here.
+- The original $32.25/month estimate supports a single Render Hobby operator. Separate Dat/Zheng workspace access adds a Pro workspace, yielding a $57.25/month base estimate before exclusions. Choose explicitly from [budget/access options](BUDGET-AND-ACCESS.md); do not share account credentials to avoid the Hobby seat limit.
 
 ## Current boundary
 
@@ -23,6 +24,8 @@ The last team-confirmed production check was Nov 16 at `a6b932a`. Main has since
 5. Record a public-safe staging URL and deployed SHA, then verify the served bundle matches that source. A healthy `/api/health` alone does not establish identity, durability or authorization.
 
 ## Hosted acceptance before real recording
+
+Use the [26-case acceptance matrix](RELEASE-ACCEPTANCE.md) to record the deployed SHA, role/device, expected/observed result and proof. All its hosted cases start as NOT RUN.
 
 - Check invited, uninvited, guest, contributor A, contributor B and reviewer. B cannot read A's private text/audio, including direct and Range requests. Guests see only approved public material; contributors cannot grant themselves review roles or publish directly.
 - Run real consent -> record -> STT -> transcript/sharing review -> private submission -> reviewer approve/reject -> public source playback -> owner withdrawal. Keep cancelled and failed operations from displaying success or losing drafts. Check both server state and the local sharing badge, including saved overrides.
