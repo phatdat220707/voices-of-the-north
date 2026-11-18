@@ -272,11 +272,17 @@
   /**
    * 局部更新（狀態機轉換用），回傳更新後紀錄。
    */
-  function patchRecord(id, patch) {
+  function patchRecord(id, patch, options) {
     var rec = getRecord(id);
     if (!rec) return null;
     var merged = Object.assign({}, rec, patch, { updatedAt: Date.now() });
-    return saveRecord(merged).record;
+    var updated = saveRecord(merged).record;
+    U.emit('vtn:record-updated', {
+      record: updated,
+      patch: Object.assign({}, patch || {}),
+      suppressSync: !!(options && options.suppressSync)
+    });
+    return updated;
   }
 
   function removeRecord(id) {
@@ -422,6 +428,23 @@
     });
     U.emit('vtn:scope-changed', { id: item.id, scope: scope, from: previous });
     return scope;
+  }
+
+  function clearScopeOverride(id) {
+    var key = String(id || '');
+    if (!key || !Object.prototype.hasOwnProperty.call(scopeOverrides, key)) return null;
+    var previous = scopeOverrides[key];
+    delete scopeOverrides[key];
+    rawSet(K.scopes, JSON.stringify(scopeOverrides));
+    var rec = getRecord(key);
+    var next = rec && VTN.SCOPES.indexOf(rec.scope) !== -1 ? rec.scope : scopePreset();
+    U.emit('vtn:scope-changed', {
+      id: key,
+      scope: next,
+      from: previous,
+      cleared: true
+    });
+    return previous;
   }
 
   /* =========================================================================
@@ -719,6 +742,7 @@
     /* 私隱 */
     scopeOf: scopeOf,
     setScope: setScope,
+    clearScopeOverride: clearScopeOverride,
     scopePreset: scopePreset,
     setScopePreset: setScopePreset,
     scopeExceptions: scopeExceptions,

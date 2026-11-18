@@ -60,7 +60,10 @@ def backend_checks():
         stories = server.load_data()["stories"]
         private = {**stories[0], "scope": "private", "owner": "someone@example.test"}
         unauthorized = {**stories[1], "authorized": False}
-        with patch("story_corpus.all_stories", return_value=[private, unauthorized]):
+        with (
+            patch("story_corpus.all_stories", return_value=[private, unauthorized]),
+            patch.object(server, "all_stories", return_value=[private, unauthorized]),
+        ):
             denied = client.post("/api/ask-village", json={
                 "question": "元朗", "storyIds": [private["id"], unauthorized["id"]],
             }).json()

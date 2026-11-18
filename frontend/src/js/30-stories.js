@@ -1055,7 +1055,7 @@
     withdrawBtn.innerHTML = '<i class="fa-solid fa-ban" aria-hidden="true"></i><span>' +
       U.escapeHtml(t('story.withdraw')) + '</span>';
     withdrawBtn.addEventListener('click', function () {
-      if (VTN.account) VTN.account.openWithdraw(story);
+      if (VTN.account) VTN.account.openWithdraw(story, { kind: 'story' });
     });
     actions.appendChild(withdrawBtn);
     host.appendChild(actions);
@@ -1400,6 +1400,18 @@
     }
   }
 
+  function refreshFromServer() {
+    if (!VTN.api || !VTN.api.stories) return Promise.resolve(false);
+    return VTN.api.stories().then(function (stories) {
+      if (!Array.isArray(stories)) return false;
+      DATA.stories = stories;
+      render();
+      return true;
+    }).catch(function () {
+      return false;
+    });
+  }
+
   function toggleOverview(force) {
     setMode(typeof force === 'boolean' ? (force ? 'map' : 'list') : (state.mode === 'list' ? 'map' : 'list'));
   }
@@ -1502,6 +1514,7 @@
     if (VTN.sheet) VTN.sheet.init();
 
     render();
+    refreshFromServer();
   }
 
   VTN.stories = {
@@ -1510,6 +1523,7 @@
     all: all,
     get: get,
     visible: visible,
+    refreshFromServer: refreshFromServer,
     filtered: filtered,
     inBbox: inBbox,
     queryContext: queryContext,
