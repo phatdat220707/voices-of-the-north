@@ -16,6 +16,8 @@ Last reconciled: **18 November 2026 (HKT)**. This is a dated handoff snapshot, n
 - The original withdrawal-authority P1 is closed for e90d7f7. A [saved sharing-override P2](https://github.com/phatdat220707/voices-of-the-north/pull/15#issuecomment-6945438123) remains: a recording card may display public after the server has made it private/withdrawn. No server access bypass was demonstrated by that UI finding.
 - Boris and Zheng report 541 selected automated assertions passing on e90d7f7; Zheng also documented limited local-browser withdrawal checks. Those results do not transfer automatically to the next merged candidate or a hosted service.
 - PRs #10-14 are historical component proposals already included in #15's ancestry. Preserve their evidence and branches; use #15 for integration review rather than merging the old PRs separately.
+- Cleanup applied Nov 18: PRs #10-14 are closed as superseded, without merging or deleting their branches. Duplicate UI planning issue #9 is closed; active UI acceptance remains in #5. Issues #2-8 now contain the current handoff notes, and #3 is assigned to Zheng.
+- GitHub rejected assigning `BorisLau` to #4 (HTTP 422). Boris remains the named accountable owner in that issue; confirm accepted repository access before assigning his account. This cleanup does not grant new access.
 - Repository setup [#1](https://github.com/phatdat220707/voices-of-the-north/pull/1) carries current docs and archives and still needs a teammate's review before Dat merges it. Its original Nov 16 checkpoint is overdue; it is not silently marked completed.
 
 ## Parallel next steps
