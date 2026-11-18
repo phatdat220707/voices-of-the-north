@@ -1,5 +1,16 @@
 # Demo baseline and test evidence
 
+Read [current status](STATUS.md) first. The Nov 9/13 sections below are historical evidence for their named revisions, not current failures or release sign-off.
+
+## Nov 17-18 handoff reconciliation
+
+- Boris and Zheng report 541 selected automated assertions on PR #15 head `e90d7f7`, plus compilation/build/syntax; Zheng documented limited actual local-browser withdrawal checks. See the [exact-head report](https://github.com/BorisLau/voices-of-the-north-techathon/blob/e90d7f75209fb086958c283f74059bd628270698/docs/audit/2026-11-17/boxuan-withdrawal-identity-fix.md). These used isolated SQLite, synthetic identities and WAV data.
+- The withdrawal-authority P1 was closed for that SHA. The [saved scope-override UI P2](https://github.com/phatdat220707/voices-of-the-north/pull/15#issuecomment-6945438123) remains. PR #15 must reconcile current main and be rechecked at a new SHA; old counts do not certify a new merge.
+- Steven UI fixes and local Ask a Story are merged in PRs #16-18. Existing screenshots/video are dated local evidence, not proof of physical-phone acceptance or the next integrated/deployed build.
+- Real invited OIDC, hosted database/RLS, private audio, real STT, restart, paired restore and deployed-staging browser checks remain pending. Newly reported interview media and consent have not been reviewed for release.
+
+## Historical Nov 9 baseline
+
 **Baseline reviewed** Nov 9, 2026. The Render frontend matched repository commit [`76b0d1e`](https://github.com/phatdat220707/voices-of-the-north/commit/76b0d1e46a45c3c44852a7ff8fde920cd7cfaa5c). Recheck the deployed build before using this evidence for a different commit. [Hosted demo](https://voices-of-the-north.onrender.com/voices-of-the-north-app.html)
 
 At that baseline, the repository contained eight team-written role-play stories and one measured sample WAV of approximately 46.7 seconds. Use the sample designation in the demo and pitch. The checks below were performed on the existing demo. Launch requirements are tracked in the [roadmap](ROADMAP.md).

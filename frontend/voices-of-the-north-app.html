@@ -3640,6 +3640,12 @@ html[data-theme="dark"] .confidence-badge--none { background: #333833; border-co
 .page--stories .atlas__searchrow { margin-top: 5px; gap: 5px; }
 .page--stories .atlas__search { min-height: 34px; padding: 0 10px; font-size: var(--fs-min); }
 .page--stories .atlas__filter { width: 34px; height: 34px; }
+/* 任務2：擴大觸控熱區至 ≥44×44（WCAG 2.5.5），視覺維持 34×34、不造成布局位移、不重排 UI 瘦身規則 */
+.page--stories .atlas__filter::before {
+  content: "";
+  position: absolute;
+  inset: -5px;
+}
 .page--stories .chip--toggle { min-height: 34px; padding: 4px 9px; font-size: var(--fs-min); }
 .page--stories .atlas__legend { gap: 4px; margin-top: 5px; }
 .page--stories .legend-chip { min-height: 26px; padding: 2px 8px 2px 4px; font-size: var(--fs-min); }
@@ -3690,6 +3696,15 @@ body .bottom-nav { padding-bottom: env(safe-area-inset-bottom); }
   border-radius: 999px; background: var(--sage-wash);
   color: var(--forest); font-size: var(--fs-min); font-weight: 700;
 }
+
+/* 31. 示例 / Mock 低調標籤（任務 4：標識示例媒體與演示置信度；不動數據、不動閾值、不動 UI 瘦身） */
+.vtn-demo-tag {
+  display: inline-flex; align-items: center;
+  padding: 1px 7px; border-radius: 999px;
+  background: #ECEEEC; color: #6b736c; border: 1px solid #cdd2cd;
+  font-size: var(--fs-min); font-weight: 700; line-height: 1.5;
+}
+.confidence-badge-wrap { display: inline-flex; align-items: center; gap: 6px; }
 
 /* ===== src/css/story-map.css ===== */
 /* =============================================================================
@@ -5040,6 +5055,413 @@ html[data-theme="dark"] .story-sheet .segment { background: rgba(255, 255, 255, 
   .player__btn { width: 46px; height: 46px; }
 }
 
+/* ===== src/css/ask-story.css ===== */
+/* ==========================================================================
+   Ask a Story — 提問求古（純前端新增層）
+   7:3 主次：錄音轉錄為主，提問為輔。此檔只新增選擇器，不覆蓋既有瘦身規則。
+   所有字級 >= --fs-min (0.875rem)；觸控熱區 >= 36px。
+   ========================================================================== */
+
+:root {
+  --ask-amber: #D97706;
+  --ask-amber-deep: #B45309;
+  --ask-amber-light: #FFF8E7;
+  --ask-oat: #F6F2E9;
+}
+
+/* ---------- 模組 1：子母伴生入口 ---------- */
+/* 與「開始錄音」CTA 等寬（calc(100% - 44px)）；高度取其約 1/3（CTA 約 198px → 66px）。
+   保留既有琥珀配色（淺底 + 深琥珀字 + 琥珀描邊），只把外形升級為長膠囊。 */
+.ask-entry-row {
+  display: flex;
+  justify-content: center;
+  margin: 10px 22px 0;
+}
+.ask-entry {
+  position: relative;
+  z-index: 6;
+  width: 100%;
+  height: 66px;
+  min-height: 66px;
+  padding: 0 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 2px solid var(--ask-amber);
+  border-radius: 999px;
+  background: var(--ask-amber-light);
+  color: var(--ask-amber-deep);
+  font-size: 1.0625rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: 0 10px 22px -12px rgba(180, 83, 9, 0.5);
+  -webkit-tap-highlight-color: transparent;
+}
+.ask-entry:hover { background: #FFEFCC; }
+.ask-entry:focus-visible { outline: 3px solid var(--ask-amber-deep); outline-offset: 2px; }
+.ask-entry i {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--ask-amber);
+  color: var(--ask-amber-light);
+  font-size: 1rem;
+}
+
+/* 地圖工具列內的伴生小按鈕：只顯示問號圖標，尺寸與其他工具按鈕一致 */
+.atlas-btn--ask {
+  width: 34px;
+  height: 34px;
+  min-height: 34px;
+  padding: 0;
+  border: 2px solid var(--ask-amber);
+  border-radius: 10px;
+  background: var(--ask-amber-light);
+  color: var(--ask-amber-deep);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+.atlas-btn--ask i { font-size: 0.875rem; }
+.atlas-btn--ask:hover { background: #FFEFCC; }
+
+/* ---------- 模組 2：二級提問抽屜 ---------- */
+/* 與多媒體 Overlay 一致：外層收斂到 min(430px,100vw) 並水平置中，
+   遮罩與面板都嚴格落在手機殼內，不會鋪滿整個桌面視口。 */
+.ask-layer {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  width: min(430px, 100vw);
+  z-index: 1200;
+  display: none;
+}
+.ask-layer.is-open { display: block; }
+/* 提問彈窗打開時鎖定文件級背景滾動（僅本彈窗存在時生效，不影響其他模組） */
+body:has(.ask-layer.is-open) { overflow: hidden; }
+.ask-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(28, 45, 36, 0.52);
+}
+.ask-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  /* 垂直置中於手機殼內、四邊留白；高度不溢視口 */
+  top: 50%;
+  bottom: auto;
+  transform: translateY(-50%);
+  width: 100%;
+  max-height: calc(100dvh - 40px);
+  display: flex;
+  flex-direction: column;
+  border-radius: 20px;
+  background: var(--ask-oat);
+  box-shadow: 0 16px 44px -20px rgba(28, 45, 36, 0.7);
+  overflow: hidden;
+}
+/* 開場動畫：由下滑入，結束定位由 translateY(-50%) 主控 */
+.ask-sheet { animation: ask-sheet-in 320ms cubic-bezier(0.33, 1, 0.68, 1); }
+@keyframes ask-sheet-in {
+  from { opacity: 0; margin-top: 24px; }
+  to { opacity: 1; margin-top: 0; }
+}
+/* 容器以 translateY(-50%) 垂直置中，開場動畫由 @keyframes 處理，不再改 transform */
+.ask-grab {
+  width: 44px;
+  height: 5px;
+  margin: 10px auto 2px;
+  border-radius: 99px;
+  background: var(--sage-line);
+  flex: none;
+}
+.ask-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 8px 20px 10px;
+  border-bottom: 1px solid var(--hairline);
+  flex: none;
+}
+.ask-head__titles { flex: 1; min-width: 0; }
+.ask-head__title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--forest-deep);
+}
+.ask-head__sub {
+  margin: 3px 0 0;
+  font-size: 0.9375rem;
+  color: var(--muted);
+}
+.ask-close {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--hairline);
+  border-radius: 50%;
+  background: var(--cream);
+  color: var(--ink-body);
+  font-size: 1rem;
+  cursor: pointer;
+}
+.ask-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 20px 24px;
+}
+.ask-field { margin-bottom: 18px; }
+.ask-label {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--ink-body);
+}
+.ask-textarea {
+  width: 100%;
+  min-height: 104px;
+  padding: 12px;
+  border: 1.5px solid var(--sage-line);
+  border-radius: 14px;
+  background: var(--cream);
+  color: var(--ink-body);
+  font-size: 1rem;
+  line-height: 1.55;
+  resize: vertical;
+}
+.ask-chips, .ask-roles, .ask-decades {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ask-chip {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1.5px solid var(--ask-amber);
+  border-radius: 18px;
+  background: var(--ask-amber-light);
+  color: var(--ask-amber-deep);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ask-chip[aria-pressed="true"] {
+  background: var(--ask-amber);
+  color: #fff;
+}
+.ask-select {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px;
+  border: 1.5px solid var(--sage-line);
+  border-radius: 12px;
+  background: var(--cream);
+  color: var(--ink-body);
+  font-size: 1rem;
+}
+.ask-mini-map {
+  position: relative;
+  height: 176px;
+  margin-top: 10px;
+  border: 1.5px solid var(--sage-line);
+  border-radius: 14px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 28% 34%, rgba(127, 166, 140, 0.55) 0 18%, transparent 19%),
+    radial-gradient(circle at 72% 68%, rgba(185, 205, 182, 0.5) 0 22%, transparent 23%),
+    linear-gradient(150deg, #EAF0E5 0%, #F1E3C1 100%);
+  cursor: grab;
+  touch-action: none;
+}
+.ask-mini-map.is-dragging { cursor: grabbing; }
+.ask-mini-map__privacy {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 96px;
+  height: 96px;
+  transform: translate(-50%, -50%);
+  border: 2px dashed rgba(217, 119, 6, 0.85);
+  border-radius: 50%;
+  background: rgba(255, 248, 231, 0.55);
+  pointer-events: none;
+}
+.ask-mini-map__pin {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -100%);
+  font-size: 1.5rem;
+  line-height: 1;
+  pointer-events: none;
+  filter: drop-shadow(0 3px 3px rgba(0, 0, 0, 0.3));
+}
+.ask-coord {
+  margin: 6px 0 0;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+.ask-submit {
+  width: 100%;
+  min-height: 52px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--ask-amber);
+  color: #fff;
+  font-size: 1.0625rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+.ask-submit:focus-visible { outline: 3px solid var(--ask-amber-deep); outline-offset: 2px; }
+.ask-tbd {
+  margin: 10px 0 0;
+  font-size: 0.875rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* ---------- 模組 3：提問圖標 ---------- */
+.vtn-qpin {
+  position: relative;
+  display: flex;
+  align-items: center;
+  max-width: 190px;
+  min-height: 34px;
+  padding: 6px 10px 6px 8px;
+  border: 2px dashed var(--ask-amber);
+  border-radius: 14px 14px 14px 2px;
+  background: var(--ask-amber-light);
+  color: var(--ask-amber-deep);
+  font-size: 0.875rem;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 4px 14px -6px rgba(180, 83, 9, 0.5);
+  -webkit-tap-highlight-color: transparent;
+}
+.vtn-qpin::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border: 2px solid rgba(217, 119, 6, 0.55);
+  border-radius: 18px 18px 18px 4px;
+  animation: ask-pulse-ring 2.2s ease-out infinite;
+  pointer-events: none;
+}
+@keyframes ask-pulse-ring {
+  0% { transform: scale(0.92); opacity: 0.85; }
+  70% { transform: scale(1.12); opacity: 0; }
+  100% { transform: scale(1.12); opacity: 0; }
+}
+.vtn-qpin__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- 模組 4：問題詳情卡 + 錄音橫幅 ---------- */
+.ask-card {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--vtn-nav-h) + 12px);
+  z-index: 1180;
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 16px 18px;
+  border: 2px solid var(--ask-amber);
+  border-radius: 16px;
+  background: var(--ask-amber-light);
+  box-shadow: 0 14px 34px -18px rgba(28, 45, 36, 0.7);
+  display: none;
+}
+.ask-card.is-open { display: block; }
+.ask-card__badge {
+  margin: 0 0 8px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--ask-amber-deep);
+}
+.ask-card__text {
+  margin: 0 0 14px;
+  font-size: 1.0625rem;
+  font-weight: 700;
+  line-height: 1.5;
+  color: var(--ink-body);
+}
+.ask-card__answer {
+  width: 100%;
+  min-height: 48px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--forest);
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+.ask-card__close {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ask-amber-deep);
+  font-size: 1.125rem;
+  cursor: pointer;
+}
+
+.vtn-ask-banner {
+  margin: 0 22px 16px;
+  padding: 12px 14px;
+  border: 2px solid var(--ask-amber);
+  border-radius: 14px;
+  background: var(--ask-amber-light);
+  color: var(--ask-amber-deep);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.vtn-ask-banner[hidden] { display: none; }
+.vtn-ask-banner__text { flex: 1; min-width: 0; }
+.vtn-ask-banner__unbind {
+  min-width: 44px;
+  min-height: 36px;
+  padding: 0 8px;
+  border: 1.5px solid var(--ask-amber);
+  border-radius: 12px;
+  background: var(--cream);
+  color: var(--ask-amber-deep);
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vtn-qpin::after { animation: none !important; }
+  .ask-sheet { transition: none; }
+}
+
   </style>
 </head>
 <body data-app-version="2026.11.09">
@@ -5237,7 +5659,8 @@ html[data-theme="dark"] .story-sheet .segment { background: rgba(255, 255, 255, 
                      data-i18n-ph="atlas.searchPh" data-i18n-aria="stories.searchAria">
             </label>
             <button type="button" class="atlas__filter" id="filterToggle"
-                    aria-expanded="false" aria-controls="filterPanel">
+                    aria-expanded="false" aria-controls="filterPanel"
+                    data-i18n-aria="stories.filterAria">
               <i class="fa-solid fa-sliders" aria-hidden="true"></i>
               <span class="filter-toggle-badge" id="filterBadge" hidden>0</span>
             </button>
@@ -5816,7 +6239,9 @@ window.VTN_WAVEFORMS = {"YL-001":[0.465,0.68,0.536,0.384,0.455,0.63,0.623,0.483,
     chat: 'vtn.v2.chat',
     migration: 'vtn.v2.migrated',
     hint: 'vtn.v2.assistant-hint',
-    deleted: 'vtn.v2.deleted'
+    deleted: 'vtn.v2.deleted',
+    questions: 'vtn.v2.questions',
+    askContext: 'vtn.v2.ask-context'
   };
 
   VTN.SCOPES = ['private', 'family', 'community', 'public'];
@@ -6119,7 +6544,7 @@ window.VTN_WAVEFORMS = {"YL-001":[0.465,0.68,0.536,0.384,0.455,0.63,0.623,0.483,
       'rec.wordTitle': '逐詞時間戳',
       'rec.confidenceUnavailable': '未能取得逐詞置信度，因此唔會顯示分數。',
       'rec.confidenceAvg': '平均置信度',
-      'rec.attachMedia': '📷 附加照片或影片（選填）',
+      'rec.attachMedia': '附加照片或影片（選填）',
       'rec.attachAdded': '已添加媒體文件，將在後端接入後正式上傳',
       'rec.attachRemove': '移除',
       'stories.mine': '我的故事',
@@ -6128,6 +6553,8 @@ window.VTN_WAVEFORMS = {"YL-001":[0.465,0.68,0.536,0.384,0.455,0.63,0.623,0.483,
       'conf.mid': '中置信度（建議核對）',
       'conf.low': '低置信度（難以聽懂）',
       'conf.none': '無數據',
+      'conf.unavailable': '無法取得',
+      'badge.demo': '示範',
       'conf.tooltip': 'AI 識別可能有誤，請確認識別結果',
       'conf.ariaPrefix': '轉錄置信度：',
       'rec.goRecordings': '去我的錄音',
@@ -6228,6 +6655,7 @@ window.VTN_WAVEFORMS = {"YL-001":[0.465,0.68,0.536,0.384,0.455,0.63,0.623,0.483,
       'stories.sub': '聽聽長者分享的地方記憶',
       'stories.searchPh': '搜尋村落、人物、關鍵詞',
       'stories.searchAria': '搜尋故事',
+      'stories.filterAria': '篩選',
       'stories.filter': '篩選',
       'stories.noResult': '沒有符合的故事',
       'stories.noResultHint': '試下減少篩選條件，或者清除全部再搵一次。',
@@ -6645,6 +7073,47 @@ window.VTN_WAVEFORMS = {"YL-001":[0.465,0.68,0.536,0.384,0.455,0.63,0.623,0.483,
       'privacy.defaultNote': '新增內容預設私人。',
       'privacy.demoNote': '示範故事為演示預設社區，不代表真實長者授權。',
 
+      /* ---- 提問故事（Ask a Story）---- */
+      'ask.entry': '提問求古',
+      'ask.entryAria': '發起提問故事',
+      'ask.title': '發起提問故事',
+      'ask.sub': '寫低你想問嘅事，等街坊回答',
+      'ask.questionLabel': '你想問啲乜？',
+      'ask.questionPh': '寫下你想請教村民或街坊嘅往事（例如：請問有街坊記得60年代粉嶺聯和墟公秤喺邊個位置嗎？）',
+      'ask.inspireLabel': '靈感詞（撳一下即刻填入）',
+      'ask.chip1': '#聯和墟公秤',
+      'ask.chip2': '#1962溫黛風球',
+      'ask.chip3': '#村口老士多',
+      'ask.chip4': '#沙頭角趕墟',
+      'ask.chip5': '#太平清醮',
+      'ask.roleLabel': '你係邊位？',
+      'ask.role1': '好奇的後生仔',
+      'ask.role2': '尋根學生',
+      'ask.role3': '同村老街坊',
+      'ask.role4': '社區義工',
+      'ask.villageLabel': '邊度嘅事？',
+      'ask.villagePh': '搜尋村落',
+      'ask.mapHint': '拖動或點擊微調位置；只顯示約 800 米模糊範圍',
+      'ask.decadeLabel': '年代',
+      'ask.dec1950': '1950',
+      'ask.dec1960': '1960',
+      'ask.dec1970': '1970',
+      'ask.dec1980': '1980',
+      'ask.dec1990': '1990+',
+      'ask.decUnknown': '不確定年代',
+      'ask.submit': '📌 發布提問至故事地圖',
+      'ask.cancel': '取消',
+      'ask.pinBadge': '待解答提問',
+      'ask.pinPrefix': '提問：',
+      'ask.previewBadge': '待解答提問 · {village} · {decade} · 來自「{role}」',
+      'ask.previewAnswer': '🎙️ 我知道！用轉錄方式回答呢個問題',
+      'ask.banner': '🔗 正在回答提問：「{question}」（📍 已自動綁定：{village} · {decade}，免重複選擇）',
+      'ask.unbind': '改為自由錄音',
+      'ask.recOption': '提問：{question}',
+      'ask.empty': '暫時未有提問，做第一個發問嘅人？',
+      'ask.saved': '提問已發布到故事地圖',
+      'ask.tbd': '回答歸檔邏輯待定（TBD）',
+
       'lang.yue': '粵語（香港）',
       'lang.zh': '華語（國語）',
       'lang.en': 'English',
@@ -6781,7 +7250,7 @@ window.VTN_WAVEFORMS = {"YL-001":[0.465,0.68,0.536,0.384,0.455,0.63,0.623,0.483,
       'rec.wordTitle': '逐词时间戳',
       'rec.confidenceUnavailable': '未能取得逐词置信度，因此不会显示分数。',
       'rec.confidenceAvg': '平均置信度',
-      'rec.attachMedia': '📷 附加照片或视频（选填）',
+      'rec.attachMedia': '附加照片或视频（选填）',
       'rec.attachAdded': '已添加媒体文件，将在后端接入后正式上传',
       'rec.attachRemove': '移除',
       'stories.mine': '我的故事',
@@ -6790,6 +7259,8 @@ window.VTN_WAVEFORMS = {"YL-001":[0.465,0.68,0.536,0.384,0.455,0.63,0.623,0.483,
       'conf.mid': '中置信度（建议核对）',
       'conf.low': '低置信度（难以听懂）',
       'conf.none': '无数据',
+      'conf.unavailable': '无法获取',
+      'badge.demo': '示例',
       'conf.tooltip': 'AI 识别可能有误，请确认识别结果',
       'conf.ariaPrefix': '转录置信度：',
       'rec.goRecordings': '去我的录音',
@@ -6890,6 +7361,7 @@ window.VTN_WAVEFORMS = {"YL-001":[0.465,0.68,0.536,0.384,0.455,0.63,0.623,0.483,
       'stories.sub': '听听长者分享的地方记忆',
       'stories.searchPh': '搜索村落、人物、关键词',
       'stories.searchAria': '搜索故事',
+      'stories.filterAria': '筛选',
       'stories.filter': '筛选',
       'stories.noResult': '没有符合的故事',
       'stories.noResultHint': '试试减少筛选条件，或者清除全部再找一次。',
@@ -7307,6 +7779,47 @@ window.VTN_WAVEFORMS = {"YL-001":[0.465,0.68,0.536,0.384,0.455,0.63,0.623,0.483,
       'privacy.defaultNote': '新增内容默认私人。',
       'privacy.demoNote': '示范故事为演示默认社区，不代表真实长者授权。',
 
+      /* ---- 提问故事（Ask a Story）---- */
+      'ask.entry': '提问求古',
+      'ask.entryAria': '发起提问故事',
+      'ask.title': '发起提问故事',
+      'ask.sub': '写下你想问的事，等街坊回答',
+      'ask.questionLabel': '你想问什么？',
+      'ask.questionPh': '写下你想请教村民或街坊的往事（例如：请问有街坊记得60年代粉岭联和墟公秤在哪个位置吗？）',
+      'ask.inspireLabel': '灵感词（点一下即刻填入）',
+      'ask.chip1': '#联和墟公秤',
+      'ask.chip2': '#1962温黛风球',
+      'ask.chip3': '#村口老士多',
+      'ask.chip4': '#沙头角赶墟',
+      'ask.chip5': '#太平清醮',
+      'ask.roleLabel': '你是谁？',
+      'ask.role1': '好奇的年轻人',
+      'ask.role2': '寻根学生',
+      'ask.role3': '同村老街坊',
+      'ask.role4': '社区义工',
+      'ask.villageLabel': '哪里的事？',
+      'ask.villagePh': '搜索村落',
+      'ask.mapHint': '拖动或点击微调位置；只显示约 800 米模糊范围',
+      'ask.decadeLabel': '年代',
+      'ask.dec1950': '1950',
+      'ask.dec1960': '1960',
+      'ask.dec1970': '1970',
+      'ask.dec1980': '1980',
+      'ask.dec1990': '1990+',
+      'ask.decUnknown': '不确定年代',
+      'ask.submit': '📌 发布提问至故事地图',
+      'ask.cancel': '取消',
+      'ask.pinBadge': '待解答提问',
+      'ask.pinPrefix': '提问：',
+      'ask.previewBadge': '待解答提问 · {village} · {decade} · 来自「{role}」',
+      'ask.previewAnswer': '🎙️ 我知道！用转录方式回答这个问题',
+      'ask.banner': '🔗 正在回答提问：「{question}」（📍 已自动绑定：{village} · {decade}，免重复选择）',
+      'ask.unbind': '改为自由录音',
+      'ask.recOption': '提问：{question}',
+      'ask.empty': '暂时没有提问，做第一个发问的人？',
+      'ask.saved': '提问已发布到故事地图',
+      'ask.tbd': '回答归档逻辑待定（TBD）',
+
       'lang.yue': '粤语（香港）',
       'lang.zh': '华语（国语）',
       'lang.en': 'English',
@@ -7443,7 +7956,7 @@ window.VTN_WAVEFORMS = {"YL-001":[0.465,0.68,0.536,0.384,0.455,0.63,0.623,0.483,
       'rec.wordTitle': 'Word timestamps',
       'rec.confidenceUnavailable': 'Word-level confidence was not available, so no score is shown.',
       'rec.confidenceAvg': 'Avg. confidence',
-      'rec.attachMedia': '📷 Attach a photo or video (optional)',
+      'rec.attachMedia': 'Attach a photo or video (optional)',
       'rec.attachAdded': 'Media attached; it will be uploaded once the backend is connected.',
       'rec.attachRemove': 'Remove',
       'stories.mine': 'My stories',
@@ -7452,6 +7965,8 @@ window.VTN_WAVEFORMS = {"YL-001":[0.465,0.68,0.536,0.384,0.455,0.63,0.623,0.483,
       'conf.mid': 'Medium (please verify)',
       'conf.low': 'Low (hard to hear)',
       'conf.none': 'No data',
+      'conf.unavailable': 'unavailable',
+      'badge.demo': 'Demo',
       'conf.tooltip': 'AI transcription may be inaccurate; please verify.',
       'conf.ariaPrefix': 'Transcription confidence: ',
       'rec.goRecordings': 'Go to my recordings',
@@ -7552,6 +8067,7 @@ window.VTN_WAVEFORMS = {"YL-001":[0.465,0.68,0.536,0.384,0.455,0.63,0.623,0.483,
       'stories.sub': 'Local memories shared by elders',
       'stories.searchPh': 'Search village, narrator, keywords',
       'stories.searchAria': 'Search stories',
+      'stories.filterAria': 'Filter',
       'stories.filter': 'Filter',
       'stories.noResult': 'No matching stories',
       'stories.noResultHint': 'Try fewer filters, or clear them all and search again.',
@@ -7968,6 +8484,47 @@ window.VTN_WAVEFORMS = {"YL-001":[0.465,0.68,0.536,0.384,0.455,0.63,0.623,0.483,
       'privacy.resetDone': 'All exceptions have been reset.',
       'privacy.defaultNote': 'New content is private by default.',
       'privacy.demoNote': 'Demo stories default to Community for the demo only; they do not represent real elders’ consent.',
+
+      /* ---- Ask a Story ---- */
+      'ask.entry': 'Ask a Story',
+      'ask.entryAria': 'Ask a story',
+      'ask.title': 'Ask a Story',
+      'ask.sub': 'Write what you wonder — neighbours may know',
+      'ask.questionLabel': 'What would you like to ask?',
+      'ask.questionPh': 'Write a memory you want to ask villagers about (e.g. does anyone remember where the Fanling market scale stood in the 1960s?)',
+      'ask.inspireLabel': 'Prompt ideas (tap to fill)',
+      'ask.chip1': '#Market scale',
+      'ask.chip2': '#1962 typhoon Wanda',
+      'ask.chip3': '#Old village shop',
+      'ask.chip4': '#Sha Tau Kok market',
+      'ask.chip5': '#Tai Ping Jiao festival',
+      'ask.roleLabel': 'Who are you?',
+      'ask.role1': 'Curious youngster',
+      'ask.role2': 'Roots-seeking student',
+      'ask.role3': 'Fellow villager',
+      'ask.role4': 'Community volunteer',
+      'ask.villageLabel': 'Where?',
+      'ask.villagePh': 'Search village',
+      'ask.mapHint': 'Drag or tap to fine-tune; only an ~800 m blurred area is shown',
+      'ask.decadeLabel': 'Era',
+      'ask.dec1950': '1950',
+      'ask.dec1960': '1960',
+      'ask.dec1970': '1970',
+      'ask.dec1980': '1980',
+      'ask.dec1990': '1990+',
+      'ask.decUnknown': 'Not sure',
+      'ask.submit': '📌 Post question to the map',
+      'ask.cancel': 'Cancel',
+      'ask.pinBadge': 'Open question',
+      'ask.pinPrefix': 'Ask:',
+      'ask.previewBadge': 'Open question · {village} · {decade} · from “{role}”',
+      'ask.previewAnswer': '🎙️ I know! Answer by recording',
+      'ask.banner': '🔗 Answering: “{question}” (📍 auto-bound: {village} · {decade} — no need to choose again)',
+      'ask.unbind': 'Record freely instead',
+      'ask.recOption': 'Question: {question}',
+      'ask.empty': 'No questions yet — be the first to ask',
+      'ask.saved': 'Question posted to the story map',
+      'ask.tbd': 'Answer archiving is TBD',
 
       'lang.yue': 'Cantonese (Hong Kong)',
       'lang.zh': 'Mandarin',
@@ -10775,12 +11332,15 @@ window.VTN_WAVEFORMS = {"YL-001":[0.465,0.68,0.536,0.384,0.455,0.63,0.623,0.483,
   function confidenceBadge(story) {
     var c = (story && typeof story.confidence === 'number') ? story.confidence : null;
     var level = c == null ? 'none' : (c >= 0.8 ? 'high' : (c >= 0.5 ? 'mid' : 'low'));
-    var key = 'conf.' + level;
+    var key = (level === 'none') ? 'conf.unavailable' : 'conf.' + level;
+    var wrap = U.node('span', { class: 'confidence-badge-wrap' });
     var b = U.node('span', { class: 'confidence-badge confidence-badge--' + level, text: t(key) });
     b.setAttribute('data-i18n', key);
     b.setAttribute('title', t('conf.ariaPrefix') + t(key));
     b.setAttribute('aria-label', t('conf.ariaPrefix') + t(key));
-    return b;
+    wrap.appendChild(b);
+    wrap.appendChild(U.node('span', { class: 'vtn-demo-tag', text: t('badge.demo') }));
+    return wrap;
   }
 
   /* 任務 2：「我的故事」切換按鈕（篩選列） */
@@ -11764,6 +12324,7 @@ window.VTN_WAVEFORMS = {"YL-001":[0.465,0.68,0.536,0.384,0.455,0.63,0.623,0.483,
   }
 
   function appendMediaFooter(box, story, type) {
+    box.appendChild(U.node('span', { class: 'vtn-demo-tag', text: t('badge.demo') }));
     var hint = U.node('p', { class: 'universal-media__hint' });
     hint.innerHTML = '<i class="fa-solid ' + (type === 'image' ? 'fa-image' : 'fa-video') +
       '" aria-hidden="true"></i><span>' +
@@ -13057,6 +13618,13 @@ window.VTN_WAVEFORMS = {"YL-001":[0.465,0.68,0.536,0.384,0.455,0.63,0.623,0.483,
     is3D: function () { return is3D; },
     reset: reset,
     status: function () { return engine; },
+    /* 只讀鉤子：供新增模組在同一地圖實例上掛載自訂圖層，不改變既有 pin / 畫線邏輯 */
+    raw: function () { return ml; },
+    flyToLngLat: function (lng, lat, zoom) {
+      if (!ml) return;
+      try { ml.flyTo({ center: [lng, lat], zoom: zoom || 13.5, essential: true }); }
+      catch (e) { /* ignore */ }
+    },
     debug: function () {
       if (engine !== 'maplibre' || !ml) return { engine: engine };
       var c = ml.getCenter();
@@ -13997,7 +14565,7 @@ window.VTN_WAVEFORMS = {"YL-001":[0.465,0.68,0.536,0.384,0.455,0.63,0.623,0.483,
   /* 任務 4：錄製審核區的整體置信度徽章（復用 30-stories 的視覺，但自帶最小實作） */
   function recConfidenceBadge(avg) {
     var level = avg == null ? 'none' : (avg >= 0.8 ? 'high' : (avg >= 0.5 ? 'mid' : 'low'));
-    var key = 'conf.' + level;
+    var key = (level === 'none') ? 'conf.unavailable' : 'conf.' + level;
     var b = U.node('span', { class: 'confidence-badge confidence-badge--' + level, text: t(key) });
     b.setAttribute('data-i18n', key);
     return b;
@@ -14928,6 +15496,7 @@ window.VTN_WAVEFORMS = {"YL-001":[0.465,0.68,0.536,0.384,0.455,0.63,0.623,0.483,
     window.addEventListener('resize', syncNavHeight);
     window.addEventListener('load', syncNavHeight);
     U.on('vtn:health', renderStatusChip);
+    U.on('vtn:lang-changed', refresh);
     U.on('vtn:withdrawn', function () {
       VTN.store.chat.prune();
       if (root.classList.contains('is-open')) renderHistory();
@@ -15235,6 +15804,8 @@ window.VTN_WAVEFORMS = {"YL-001":[0.465,0.68,0.536,0.384,0.455,0.63,0.623,0.483,
   function refresh() {
     if (root && root.classList.contains('is-open')) renderHistory();
     renderStatusChip();
+    if (fab) fab.setAttribute('aria-label', t('assistant.fabAria'));
+    if (hint && !hint.hidden) hint.innerHTML = U.escapeHtml(t('assistant.hint')) + '<small>' + U.escapeHtml(t('assistant.hintSub')) + '</small>';
   }
 
   function mount() {
@@ -15494,6 +16065,670 @@ window.VTN_WAVEFORMS = {"YL-001":[0.465,0.68,0.536,0.384,0.455,0.63,0.623,0.483,
   }
 
   VTN.about = { init: init, render: render };
+})();
+
+/* ===== src/js/60-ask-story.js ===== */
+/* =============================================================================
+ * 60-ask-story — 提問求古（Ask a Story）純前端閉環
+ * -----------------------------------------------------------------------------
+ * 追加式模組：不改寫既有故事 pin / 年代篩選 / 錄音核心函式。
+ *   ① 主頁／地圖子母伴生小入口 → ② 二級填寫選點抽屜 → ③ 地圖提問圖標
+ *   → ④ 詳情卡攜帶上下文跳轉 #recording → ⑤ 一問多答 answers[] 預留
+ * 資料只存 VTN.KEYS.questions / askContext（localStorage），無任何後端程式碼。
+ * ========================================================================== */
+
+(function () {
+  'use strict';
+
+  var VTN = window.VTN;
+  var U = VTN.util;
+
+  function t(key, vars) { return VTN.i18n.t(key, vars); }
+  function byId(id) { return document.getElementById(id); }
+  function node(tag, attrs) { return U.node(tag, attrs); }
+
+  /* ---- 村落座標字典（純前端常量；經緯度取自 data/stories.json 附近值）------ */
+  var VILLAGES = [
+    { name: '粉嶺聯和墟', lat: 22.4982, lng: 114.1435 },
+    { name: '古洞村', lat: 22.5020, lng: 114.1040 },
+    { name: '上水河上鄉', lat: 22.5100, lng: 114.1120 },
+    { name: '荔枝窩', lat: 22.5320, lng: 114.1810 },
+    { name: '谷埔', lat: 22.5290, lng: 114.1930 },
+    { name: '沙頭角', lat: 22.5310, lng: 114.2100 },
+    { name: '吉澳', lat: 22.5450, lng: 114.2280 }
+  ];
+
+  var ROLES = ['ask.role1', 'ask.role2', 'ask.role3', 'ask.role4'];
+  var CHIPS = ['ask.chip1', 'ask.chip2', 'ask.chip3', 'ask.chip4', 'ask.chip5'];
+  var DECADES = ['ask.dec1950', 'ask.dec1960', 'ask.dec1970', 'ask.dec1980', 'ask.dec1990', 'ask.decUnknown'];
+
+  var DEFAULT_QUESTIONS = [
+    {
+      id: 'Q-FL-001',
+      questionText: '請問有街坊記得 60 年代粉嶺聯和墟公秤喺邊個位置？當年係點樣睇秤㗎？',
+      village: '粉嶺聯和墟', decade: 'ask.dec1960', askerRole: 'ask.role1',
+      lat: 22.4982, lng: 114.1435, privacyRadiusMeters: 800,
+      status: 'open', createdAt: '2026-11-15', answers: []
+    },
+    {
+      id: 'Q-KT-002',
+      questionText: '古洞村 1962 年溫黛風球嗰陣，村民點樣避難？有冇人記得當時嘅情況？',
+      village: '古洞村', decade: 'ask.dec1960', askerRole: 'ask.role2',
+      lat: 22.5020, lng: 114.1040, privacyRadiusMeters: 800,
+      status: 'open', createdAt: '2026-11-15', answers: []
+    },
+    {
+      id: 'Q-LCW-003',
+      questionText: '荔枝窩村口以前嘅老士多賣啲乜？有冇街坊記得老闆嘅名字？',
+      village: '荔枝窩', decade: 'ask.dec1950', askerRole: 'ask.role3',
+      lat: 22.5320, lng: 114.1810, privacyRadiusMeters: 800,
+      status: 'open', createdAt: '2026-11-15', answers: []
+    }
+  ];
+
+  /* ---- 狀態 ------------------------------------------------------------- */
+  var draft = null;
+  var layer = null;
+  var scrim = null;
+  var sheet = null;
+  var bodyEl = null;
+  var card = null;
+  var banner = null;
+  var questionMarkers = {};
+  var pinZoomBound = false;
+  var openQuestionId = null;
+  var activeContext = null;
+  var prevOnChange = null;
+
+  /* ---- 儲存（純前端）----------------------------------------------------- */
+  function rawGet(key) { try { return window.localStorage.getItem(key); } catch (e) { return null; } }
+  function rawSet(key, value) { try { window.localStorage.setItem(key, value); return true; } catch (e) { return false; } }
+
+  function loadQuestions() {
+    var raw = rawGet(VTN.KEYS.questions);
+    var list = null;
+    if (raw) { try { list = JSON.parse(raw); } catch (e) { list = null; } }
+    if (!Array.isArray(list) || !list.length) {
+      list = DEFAULT_QUESTIONS.map(function (q) {
+        return JSON.parse(JSON.stringify(q));
+      });
+      rawSet(VTN.KEYS.questions, JSON.stringify(list));
+    }
+    return list;
+  }
+  function saveQuestions(list) { rawSet(VTN.KEYS.questions, JSON.stringify(list)); }
+
+  function loadContext() {
+    var raw = rawGet(VTN.KEYS.askContext);
+    if (!raw) return null;
+    try { return JSON.parse(raw); } catch (e) { return null; }
+  }
+  function saveContext(ctx) {
+    if (!ctx) { try { window.localStorage.removeItem(VTN.KEYS.askContext); } catch (e) {} return; }
+    rawSet(VTN.KEYS.askContext, JSON.stringify(ctx));
+  }
+
+  /* ---- 入口注入 ---------------------------------------------------------- */
+  function makeEntry(id, classNames, html, ariaKey, onClick) {
+    var btn = node('button', {
+      type: 'button', id: id, class: classNames,
+      'data-i18n-aria': ariaKey, 'data-i18n-title': ariaKey
+    });
+    btn.innerHTML = html;
+    btn.addEventListener('click', function (event) {
+      event.stopPropagation();
+      onClick();
+    });
+    return btn;
+  }
+
+  function injectEntries() {
+    var home = byId('startRecordBtn');
+    if (home && !byId('askEntryHome')) {
+      /* 從 CTA 內部移出，作為獨立區塊放在「開始錄音」正下方（塊級流，不干擾既有按鈕） */
+      var companion = makeEntry('askEntryHome', 'ask-entry',
+        '<i class="fa-solid fa-circle-question" aria-hidden="true"></i><span data-i18n="ask.entry"></span>',
+        'ask.entryAria', openSheet);
+      var row = node('div', { class: 'ask-entry-row' });
+      row.appendChild(companion);
+      home.parentNode.insertBefore(row, home.nextSibling);
+    }
+
+    var tools = document.querySelector('.atlas__tools');
+    if (tools && !byId('askEntryMap')) {
+      var mapEntry = makeEntry('askEntryMap', 'atlas-btn atlas-btn--ask',
+        '<i class="fa-solid fa-circle-question" aria-hidden="true"></i>',
+        'ask.entryAria', openSheet);
+      tools.insertBefore(mapEntry, tools.firstChild);
+    }
+  }
+
+  /* ---- 二級抽屜 ---------------------------------------------------------- */
+  function ensureSheet() {
+    if (sheet) return;
+
+    layer = node('div', { class: 'ask-layer', id: 'askLayer' });
+    scrim = node('div', { class: 'ask-scrim' });
+    scrim.addEventListener('click', closeSheet);
+
+    sheet = node('div', {
+      class: 'ask-sheet', role: 'dialog', 'aria-modal': 'true',
+      'aria-labelledby': 'askSheetTitle'
+    });
+    sheet.appendChild(node('div', { class: 'ask-grab', 'aria-hidden': 'true' }));
+
+    var head = node('div', { class: 'ask-head' });
+    var titles = node('div', { class: 'ask-head__titles' });
+    titles.appendChild(node('h2', {
+      class: 'ask-head__title', id: 'askSheetTitle', 'data-i18n': 'ask.title'
+    }));
+    titles.appendChild(node('p', {
+      class: 'ask-head__sub', 'data-i18n': 'ask.sub'
+    }));
+    var closeBtn = node('button', {
+      type: 'button', class: 'ask-close', 'data-i18n-aria': 'ask.cancel'
+    });
+    closeBtn.innerHTML = '<i class="fa-solid fa-xmark" aria-hidden="true"></i>';
+    closeBtn.addEventListener('click', closeSheet);
+    head.appendChild(titles);
+    head.appendChild(closeBtn);
+    sheet.appendChild(head);
+
+    bodyEl = node('div', { class: 'ask-body' });
+    sheet.appendChild(bodyEl);
+    layer.appendChild(scrim);
+    layer.appendChild(sheet);
+
+    var shell = byId('appShell') || document.body;
+    shell.appendChild(layer);
+    VTN.i18n.apply(layer);
+  }
+
+  function openSheet() {
+    ensureSheet();
+    draft = {
+      text: '', village: VILLAGES[0].name,
+      lat: VILLAGES[0].lat, lng: VILLAGES[0].lng,
+      role: ROLES[0], decade: DECADES[1]
+    };
+    renderForm();
+    layer.classList.add('is-open');
+    layer.setAttribute('aria-hidden', 'false');
+    (byId('appShell') || document.body).classList.add('is-modal-open');
+    setTimeout(function () {
+      var first = bodyEl && bodyEl.querySelector('textarea');
+      if (first) { try { first.focus({ preventScroll: true }); } catch (e) { first.focus(); } }
+    }, 120);
+  }
+
+  function closeSheet() {
+    if (!layer) return;
+    layer.classList.remove('is-open');
+    layer.setAttribute('aria-hidden', 'true');
+    (byId('appShell') || document.body).classList.remove('is-modal-open');
+    draft = null;
+  }
+
+  function renderForm() {
+    bodyEl.textContent = '';
+
+    /* 1. 問題內容 */
+    var qField = node('div', { class: 'ask-field' });
+    qField.appendChild(node('label', {
+      class: 'ask-label', 'data-i18n': 'ask.questionLabel', for: 'askQuestion'
+    }));
+    var textarea = node('textarea', {
+      id: 'askQuestion', class: 'ask-textarea', maxlength: '60',
+      'data-i18n-ph': 'ask.questionPh'
+    });
+    textarea.addEventListener('input', function () { draft.text = textarea.value; });
+    qField.appendChild(textarea);
+
+    var chipLabel = node('p', { class: 'ask-label', 'data-i18n': 'ask.inspireLabel' });
+    qField.appendChild(chipLabel);
+    var chipRow = node('div', { class: 'ask-chips' });
+    CHIPS.forEach(function (key) {
+      var chip = node('button', { type: 'button', class: 'ask-chip', 'data-i18n': key });
+      chip.addEventListener('click', function () {
+        textarea.value = t(key).replace(/^#/, '');
+        draft.text = textarea.value;
+        textarea.focus();
+      });
+      chipRow.appendChild(chip);
+    });
+    qField.appendChild(chipRow);
+    bodyEl.appendChild(qField);
+
+    /* 2. 提問者身份 */
+    var roleField = node('div', { class: 'ask-field' });
+    roleField.appendChild(node('p', { class: 'ask-label', 'data-i18n': 'ask.roleLabel' }));
+    var roleRow = node('div', { class: 'ask-roles', role: 'group', 'data-i18n-aria': 'ask.roleLabel' });
+    ROLES.forEach(function (key, index) {
+      var chip = node('button', {
+        type: 'button', class: 'ask-chip', 'data-i18n': key,
+        'aria-pressed': key === draft.role ? 'true' : 'false'
+      });
+      chip.addEventListener('click', function () {
+        draft.role = key;
+        Array.prototype.forEach.call(roleRow.children, function (child, i) {
+          child.setAttribute('aria-pressed', i === index ? 'true' : 'false');
+        });
+      });
+      roleRow.appendChild(chip);
+    });
+    roleField.appendChild(roleRow);
+    bodyEl.appendChild(roleField);
+
+    /* 3. 村落 + 微縮選點 */
+    var placeField = node('div', { class: 'ask-field' });
+    placeField.appendChild(node('label', {
+      class: 'ask-label', 'data-i18n': 'ask.villageLabel', for: 'askVillage'
+    }));
+    var select = node('select', {
+      id: 'askVillage', class: 'ask-select', 'data-i18n-aria': 'ask.villageLabel'
+    });
+    VILLAGES.forEach(function (v) {
+      select.appendChild(node('option', { value: v.name, text: v.name }));
+    });
+    select.value = draft.village;
+    var coord = node('p', { class: 'ask-coord' });
+    function syncCoord() {
+      coord.textContent = draft.lat.toFixed(4) + ', ' + draft.lng.toFixed(4);
+    }
+    select.addEventListener('change', function () {
+      var found = VILLAGES.filter(function (v) { return v.name === select.value; })[0];
+      if (found) { draft.village = found.name; draft.lat = found.lat; draft.lng = found.lng; syncCoord(); }
+    });
+    placeField.appendChild(select);
+
+    var mini = node('div', { class: 'ask-mini-map', id: 'askMiniMap' });
+    mini.appendChild(node('div', { class: 'ask-mini-map__privacy', 'aria-hidden': 'true' }));
+    mini.appendChild(node('div', { class: 'ask-mini-map__pin', 'aria-hidden': 'true' }))
+      .innerHTML = '<i class="fa-solid fa-location-pin" aria-hidden="true"></i>❓';
+    mini.appendChild(node('p', { class: 'ask-coord', 'data-i18n': 'ask.mapHint' }));
+    placeField.appendChild(mini);
+
+    var dragging = false, sx = 0, sy = 0, sLat = 0, sLng = 0;
+    mini.addEventListener('pointerdown', function (event) {
+      dragging = true;
+      mini.classList.add('is-dragging');
+      sx = event.clientX; sy = event.clientY;
+      sLat = draft.lat; sLng = draft.lng;
+      try { mini.setPointerCapture(event.pointerId); } catch (e) { /* ignore */ }
+    });
+    mini.addEventListener('pointermove', function (event) {
+      if (!dragging) return;
+      draft.lng = sLng + (event.clientX - sx) * 0.00018;
+      draft.lat = sLat - (event.clientY - sy) * 0.00018;
+      syncCoord();
+    });
+    function endDrag() { dragging = false; mini.classList.remove('is-dragging'); }
+    mini.addEventListener('pointerup', endDrag);
+    mini.addEventListener('pointercancel', endDrag);
+
+    coord.textContent = draft.lat.toFixed(4) + ', ' + draft.lng.toFixed(4);
+    placeField.appendChild(coord);
+    bodyEl.appendChild(placeField);
+
+    /* 4. 年代 */
+    var eraField = node('div', { class: 'ask-field' });
+    eraField.appendChild(node('p', { class: 'ask-label', 'data-i18n': 'ask.decadeLabel' }));
+    var eraRow = node('div', { class: 'ask-decades', role: 'group', 'data-i18n-aria': 'ask.decadeLabel' });
+    DECADES.forEach(function (key, index) {
+      var chip = node('button', {
+        type: 'button', class: 'ask-chip', 'data-i18n': key,
+        'aria-pressed': key === draft.decade ? 'true' : 'false'
+      });
+      chip.addEventListener('click', function () {
+        draft.decade = key;
+        Array.prototype.forEach.call(eraRow.children, function (child, i) {
+          child.setAttribute('aria-pressed', i === index ? 'true' : 'false');
+        });
+      });
+      eraRow.appendChild(chip);
+    });
+    eraField.appendChild(eraRow);
+    bodyEl.appendChild(eraField);
+
+    /* 5. 提交 */
+    var submit = node('button', {
+      type: 'button', class: 'ask-submit', id: 'askSubmit', 'data-i18n': 'ask.submit'
+    });
+    submit.addEventListener('click', submitQuestion);
+    bodyEl.appendChild(submit);
+    bodyEl.appendChild(node('p', { class: 'ask-tbd', 'data-i18n': 'ask.tbd' }));
+
+    VTN.i18n.apply(bodyEl);
+  }
+
+  function submitQuestion() {
+    if (!draft) return;
+    var text = String(draft.text || '').trim().slice(0, 60);
+    if (!text) {
+      var field = byId('askQuestion');
+      if (field) { field.focus(); field.classList.add('is-invalid'); }
+      return;
+    }
+    var list = loadQuestions();
+    var question = {
+      id: 'Q-' + Date.now().toString(36).toUpperCase(),
+      questionText: text,
+      village: draft.village,
+      decade: draft.decade,
+      askerRole: draft.role,
+      lat: Number(draft.lat.toFixed(4)),
+      lng: Number(draft.lng.toFixed(4)),
+      privacyRadiusMeters: 800,
+      status: 'open',
+      createdAt: new Date().toISOString().slice(0, 10),
+      answers: []
+    };
+    list.unshift(question);
+    saveQuestions(list);
+    closeSheet();
+    if (VTN.ui && VTN.ui.toast) VTN.ui.toast(t('ask.saved'), 'success');
+    VTN.router.go('stories', {});
+    /* 地圖首次初始化需時；延遲並重試聚焦，確保 panTo 到新提問圖標後不會被 fitAll 覆蓋 */
+    var focusAttempts = 0;
+    function focusNewPin() {
+      focusAttempts++;
+      VTN.map.ensureVisible();
+      syncQuestionPins();
+      VTN.map.flyToLngLat(question.lng, question.lat, 13.5);
+      var zoom = (VTN.map.debug() || {}).zoom;
+      if ((zoom === undefined || zoom < 12) && focusAttempts < 6) {
+        setTimeout(focusNewPin, 380);
+      }
+    }
+    setTimeout(focusNewPin, 520);
+  }
+
+  /* ---- 模組 3：提問圖標（獨立圖層）--------------------------------------- */
+  function matchesEra(question) {
+    var all = byId('atlasEraAll');
+    var range = byId('atlasEra');
+    if (all && all.getAttribute('aria-pressed') === 'true') return true;
+    if (question.decade === 'ask.decUnknown') return true;
+    var index = range ? Number(range.value) : 0;
+    var stopped = [1950, 1960, 1970, 1980, 1990];
+    if (question.decade === 'ask.dec1990') return index === 4;
+    var year = Number((question.decade || '').replace('ask.dec', ''));
+    return isFinite(year) ? stopped[index] === year : true;
+  }
+
+  function questionPin(question) {
+    var btn = node('button', {
+      type: 'button', class: 'vtn-qpin',
+      'data-question': question.id,
+      'aria-label': t('ask.pinBadge') + '：' + question.questionText
+    });
+    var prefix = node('span', { class: 'vtn-qpin__label' });
+    prefix.textContent = '❓ ' + t('ask.pinPrefix') +
+      question.questionText.slice(0, 10) + '…';
+    btn.appendChild(prefix);
+    btn.addEventListener('click', function (event) {
+      event.stopPropagation();
+      openQuestion(question.id);
+    });
+    return btn;
+  }
+
+  function applyQuestionVisibility() {
+    var map = VTN.map.raw && VTN.map.raw();
+    if (!map) return;
+    var zoom = map.getZoom && map.getZoom();
+    var show = !(zoom !== undefined && zoom < 9.4);
+    Object.keys(questionMarkers).forEach(function (id) {
+      var el = questionMarkers[id].getElement();
+      el.style.display = show ? '' : 'none';
+      el.style.pointerEvents = show ? '' : 'none';
+    });
+  }
+
+  function syncQuestionPins() {
+    var map = VTN.map.raw && VTN.map.raw();
+    if (!map) return;
+    var list = loadQuestions().filter(matchesEra);
+    var alive = {};
+    list.forEach(function (question) {
+      alive[question.id] = true;
+      var marker = questionMarkers[question.id];
+      if (!marker) {
+        marker = new window.maplibregl.Marker({
+          element: questionPin(question), anchor: 'bottom'
+        }).setLngLat([question.lng, question.lat]).addTo(map);
+        /* MapLibre 會把 element 的 aria-label 改成 "Map marker"，這裡重新寫回 */
+        marker.getElement().setAttribute('aria-label',
+          t('ask.pinBadge') + '：' + question.questionText);
+        questionMarkers[question.id] = marker;
+      } else {
+        marker.setLngLat([question.lng, question.lat]);
+      }
+    });
+    Object.keys(questionMarkers).forEach(function (id) {
+      if (!alive[id]) {
+        try { questionMarkers[id].remove(); } catch (e) { /* ignore */ }
+        delete questionMarkers[id];
+      }
+    });
+    if (!pinZoomBound) {
+      map.on('zoom', applyQuestionVisibility);
+      pinZoomBound = true;
+    }
+    applyQuestionVisibility();
+  }
+
+  /* ---- 模組 4：詳情卡 + 錄音上下文 --------------------------------------- */
+  function ensureCard() {
+    if (card) return;
+    card = node('div', { class: 'ask-card', id: 'askQuestionCard', role: 'dialog' });
+    var closeBtn = node('button', {
+      type: 'button', class: 'ask-card__close', 'data-i18n-aria': 'ask.cancel'
+    });
+    closeBtn.innerHTML = '<i class="fa-solid fa-xmark" aria-hidden="true"></i>';
+    closeBtn.addEventListener('click', function () { card.classList.remove('is-open'); });
+    var badge = node('p', { class: 'ask-card__badge' });
+    badge.id = 'askCardBadge';
+    var text = node('p', { class: 'ask-card__text' });
+    text.id = 'askCardText';
+    var answer = node('button', {
+      type: 'button', class: 'ask-card__answer', id: 'askCardAnswer'
+    });
+    answer.addEventListener('click', answerQuestion);
+    card.appendChild(closeBtn);
+    card.appendChild(badge);
+    card.appendChild(text);
+    card.appendChild(answer);
+    (byId('appShell') || document.body).appendChild(card);
+    VTN.i18n.apply(card);
+  }
+
+  function openQuestion(id) {
+    var question = loadQuestions().filter(function (q) { return q.id === id; })[0];
+    if (!question) return;
+    ensureCard();
+    openQuestionId = id;
+    byId('askCardBadge').textContent = t('ask.previewBadge', {
+      village: question.village,
+      decade: t(question.decade),
+      role: t(question.askerRole)
+    });
+    byId('askCardText').textContent = '「' + question.questionText + '」';
+    byId('askCardAnswer').textContent = t('ask.previewAnswer');
+    card.classList.add('is-open');
+  }
+
+  function answerQuestion() {
+    if (!openQuestionId) return;
+    var question = loadQuestions().filter(function (q) { return q.id === openQuestionId; })[0];
+    if (!question) return;
+    activeContext = {
+      questionId: question.id,
+      questionText: question.questionText,
+      village: question.village,
+      decade: t(question.decade),
+      lat: question.lat,
+      lng: question.lng
+    };
+    saveContext(activeContext);
+    if (card) card.classList.remove('is-open');
+    VTN.router.go('recording', {});
+    setTimeout(applyContextToRecorder, 120);
+  }
+
+  function ensureBanner() {
+    if (banner) return;
+    banner = node('div', { class: 'vtn-ask-banner', id: 'askAnswerBanner' });
+    banner.hidden = true;
+    var text = node('span', { class: 'vtn-ask-banner__text' });
+    text.id = 'askBannerText';
+    var unbind = node('button', {
+      type: 'button', class: 'vtn-ask-banner__unbind', id: 'askBannerUnbind'
+    });
+    unbind.addEventListener('click', unbindQuestion);
+    banner.appendChild(text);
+    banner.appendChild(unbind);
+    /* 放進錄音浮層 head 之後：浮層打開時橫幅仍可見可點（頁面級會被浮層遮住）。
+       若浮層尚未建立，先放頁面 hero 後，applyContextToRecorder 會再搬進浮層。 */
+    var sheetHead = document.querySelector('.vtn-rec-sheet__head');
+    if (sheetHead && sheetHead.parentNode) {
+      sheetHead.parentNode.insertBefore(banner, sheetHead.nextSibling);
+    } else {
+      var recording = document.querySelector('[data-view="recording"]');
+      if (recording) {
+        var hero = recording.querySelector('.hero');
+        recording.insertBefore(banner, hero ? hero.nextSibling : recording.firstChild);
+      }
+    }
+  }
+
+  function unbindQuestion() {
+    activeContext = null;
+    saveContext(null);
+    if (banner) banner.hidden = true;
+    if (prevOnChange) {
+      var select = document.querySelector('.vtn-rec-sheet select');
+      if (select) {
+        if (select._askOption) {
+          try { select.removeChild(select._askOption); } catch (e) { /* ignore */ }
+          select._askOption = null;
+        }
+        select.onchange = prevOnChange;
+        select.value = '';
+        prevOnChange();
+      }
+      prevOnChange = null;
+    }
+  }
+
+  function applyContextToRecorder() {
+    var ctx = activeContext || loadContext();
+    if (!ctx) return;
+    activeContext = ctx;
+    ensureBanner();
+    byId('askBannerText').textContent = t('ask.banner', {
+      question: ctx.questionText, village: ctx.village, decade: ctx.decade
+    });
+    byId('askBannerUnbind').textContent = t('ask.unbind');
+    banner.hidden = false;
+
+    VTN.recorder.open();
+    setTimeout(function () {
+      var sheetHead = document.querySelector('.vtn-rec-sheet__head');
+      if (sheetHead && sheetHead.parentNode && banner.parentNode !== sheetHead.parentNode) {
+        sheetHead.parentNode.insertBefore(banner, sheetHead.nextSibling);
+      }
+      var select = document.querySelector('.vtn-rec-sheet select');
+      if (!select) return;
+      if (select._askBoundQuestionId === ctx.questionId && select.value === '__ask__') return;
+
+      if (!prevOnChange && select.onchange) prevOnChange = select.onchange;
+      if (select._askOption) {
+        try { select.removeChild(select._askOption); } catch (e) { /* ignore */ }
+      }
+      var option = node('option', {
+        value: '__ask__',
+        text: t('ask.recOption', { question: ctx.questionText.slice(0, 22) })
+      });
+      select.insertBefore(option, select.firstChild);
+      select._askOption = option;
+      select._askBoundQuestionId = ctx.questionId;
+
+      select.onchange = function () {
+        if (select.value === '__ask__') {
+          if (prevOnChange) {
+            var restore = select.value;
+            select.value = '';
+            prevOnChange();
+            select.value = restore;
+          }
+          var note = select.parentNode && select.parentNode.querySelector('.vtn-rec-note span');
+          if (note) note.textContent = ctx.questionText + '（' + ctx.village + ' · ' + ctx.decade + '）';
+        } else if (prevOnChange) {
+          prevOnChange();
+        }
+      };
+      select.value = '__ask__';
+      select.onchange();
+    }, 160);
+  }
+
+  /* ---- 事件綁定（追加，不改寫既有函式）----------------------------------- */
+  /* 地圖為懶初始化：輪詢直到 map 實例存在，確保提問 pin 首次進入即出現 */
+  function ensurePinsOnStories(attempt) {
+    attempt = attempt || 0;
+    if (VTN.map.raw && VTN.map.raw()) {
+      syncQuestionPins();
+      return;
+    }
+    if (attempt < 20) setTimeout(function () { ensurePinsOnStories(attempt + 1); }, 180);
+  }
+
+  function bindEvents() {
+    window.addEventListener('hashchange', function () { setTimeout(function () { ensurePinsOnStories(0); }, 60); });
+    var all = byId('atlasEraAll');
+    var range = byId('atlasEra');
+    if (all) all.addEventListener('click', function () { setTimeout(syncQuestionPins, 40); });
+    if (range) {
+      range.addEventListener('input', function () { setTimeout(syncQuestionPins, 40); });
+      range.addEventListener('change', function () { setTimeout(syncQuestionPins, 40); });
+    }
+    window.addEventListener('vtn:stories-mode', syncQuestionPins);
+    U.on('vtn:lang-changed', function () {
+      if (layer && layer.classList.contains('is-open')) {
+        renderForm();
+        VTN.i18n.apply(layer);
+      }
+      if (card && card.classList.contains('is-open') && openQuestionId) openQuestion(openQuestionId);
+      if (activeContext && banner && !banner.hidden) applyContextToRecorder();
+      syncQuestionPins();
+    });
+  }
+
+  function init() {
+    bindEvents();
+    injectEntries();
+    ensureBanner();
+    syncQuestionPins();
+    ensurePinsOnStories(0);
+    if (loadContext()) setTimeout(applyContextToRecorder, 260);
+  }
+
+  VTN.askStory = {
+    init: init,
+    open: openSheet,
+    close: closeSheet,
+    list: loadQuestions,
+    syncPins: syncQuestionPins,
+    answer: answerQuestion,
+    unbind: unbindQuestion
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
 })();
 
 /* ===== src/js/65-account.js ===== */

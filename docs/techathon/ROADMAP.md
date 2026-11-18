@@ -1,5 +1,7 @@
 # Techathon+ launch roadmap
 
+Read [current status and parallel next steps](STATUS.md) before assigning or testing work. Only Dat merges reviewed PRs; team members retain independent branches.
+
 GitHub holds work items, decisions, PRs, and public-safe evidence. Track delivery in the [GitHub backlog](https://github.com/phatdat220707/voices-of-the-north/milestone/1). Use the team Google Doc for daily check-ins in your own tab.
 
 See the [work items](WORK-ITEMS.md) for what each person can start now and what must be ready for final verification. The [main demo flow](DEMO-FLOW.md) defines the handoffs between workstreams.
@@ -32,12 +34,12 @@ Douglas has accepted Competition & Pitch. He owns the submission checklist, rese
 
 Jan 8 is the internal deadline. The organizers confirmed to the team that fast-track entrants must submit their pitch deck through the portal by **Jan 11, 2027 at 23:59 HKT**. HumanLoop has a place in the Finale and must still meet the required deliverables and dates. The organizers also confirmed that the theme can be edited through My Team Profile. The team plans to select AI+ Digital Economy & Smart City when submitting the updated profile. Keep portal status and any later requirements current. After submission, rehearse the official format with the backup video. [Techathon+ participation guide](https://hktechathon.com/en/site/join)
 
-Boris has reported a local Supabase-compatible implementation with PostgreSQL, authentication, and private audio storage. Zheng reviews the proposal with Boris and Dat coordinates the decision. SQLite remains the documented baseline until the proposed storage change is reviewed. Share a branch, reproducible tests, real-service checks still pending, costs, and backup/restore behavior before changing the shared architecture.
+Zheng and Boris have agreed on one staging direction: Render FastAPI for frontend/API, private audio on a Render persistent disk, Supabase PostgreSQL, and Google OIDC verified by FastAPI with an invite allowlist. Zheng implements OIDC and owns deployment/configuration; Boris supports schema, backend and acceptance. SQLite remains the local/demo fallback. Supabase Auth and a Storage bucket adapter are outside this round. Technical agreement does not approve paid provisioning or establish hosted readiness. See [deployment gates](DEPLOYMENT.md).
 
 ## Launch acceptance
 
 - Separate staging from production. Verify Google OpenID Connect identity server-side and authorize invites, reviewer privileges, and each private resource on the server. Disable demo login and demo administrator grants in production. Dat approves costs before paid services are enabled. [Google OpenID Connect](https://developers.google.com/identity/openid-connect/openid-connect)
-- Put SQLite and private audio on persistent storage outside the public static directory. Document backup and restore, then test restart and restoration in staging before enabling recording. Ensure restoration does not republish withdrawn content. [Render Persistent Disks](https://render.com/docs/disks)
+- Persist private audio outside public static serving and use the agreed PostgreSQL staging database (SQLite is the local/demo fallback). Test restart and coordinated database-plus-audio backup/restore before enabling recording. Ensure restoration does not republish withdrawn content. [Render Persistent Disks](https://render.com/docs/disks)
 - Require consent before requesting microphone access. Show the transcript and intended sharing scope before the contributor submits. Enforce the publication decision separately from consent. Record review and withdrawal actions without exposing private content.
 - Check guest, uninvited, contributor A, contributor B, and reviewer paths. Confirm that B cannot read or play A's private recording, and that guests only see approved public stories.
 - Withdraw a published test story and confirm it leaves archive, search, map, Ask the Village, and old audio URLs. Include cached/offline and server-error cases. Public surfaces should fail closed when approval status cannot be verified.
@@ -49,7 +51,7 @@ Dat approves public recording after access controls, restart/restore, moderation
 
 Acknowledge work tags in under five hours. Post a daily update in your own Google Doc tab by 21:00 HKT. Link the relevant issue, PR, or test evidence. Keep scope changes, handoffs, and evidence that reviewers need on the GitHub issue or PR.
 
-After a push or a completed handoff, notify Dat in the team chat with what changed, the issue and commit or PR link, and the steps to test it. Include work coordinated on WeChat in the same update. A specific deadline agreed with Dat, such as the Nov 13 handoff at 23:59 HKT, takes precedence for that handoff.
+After a push or a completed handoff, notify Dat in the team chat with what changed, the issue and commit or PR link, and the steps to test it. Include work coordinated on WeChat in the same update. A specific deadline agreed with Dat takes precedence for that handoff. After a missed checkpoint, record the original date and ask Dat to approve the proposed replacement; the Nov 16 repository checkpoint is still pending review.
 
 ```text
 Done + proof | PR, commit, or safe reproduction and result

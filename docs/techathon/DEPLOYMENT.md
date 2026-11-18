@@ -1,25 +1,33 @@
 # Deployment verification and handoff
 
-Zheng owns the authentication, storage and deployment handoff. Dat coordinates merging and release decisions. The application serves the bundled frontend and its API from the same FastAPI service. Use [the README](../../README.md) for local setup and source-build commands.
+Updated 18 November 2026. Read [STATUS.md](STATUS.md) for the exact review candidate. No staging readiness or cost approval is granted by this document.
 
-## Dated live evidence
+## Owners and agreed direction
 
-In the [Nov 13 technical review](https://github.com/phatdat220707/voices-of-the-north/pull/1#issuecomment-6847324712), Zheng reported that the Render dashboard showed commit `0cc1701` Live at 14:45:55 HKT, that the hosted HTML matched the baseline, and that the story API returned 14 stories. This is a dated demo check. Invited Google sign-in, Supabase, restart/restore and complete publication/withdrawal still need staging evidence.
+- Zheng/Boxuan owns Google OIDC implementation, invite/role enforcement, deployment/configuration, and the deployed-SHA record. Boris supports backend/schema, samples and acceptance. Dat coordinates reviewed merges, approves costs and makes the recording-release decision.
+- One Render FastAPI service serves frontend/API on the same origin. Private audio lives on a Render persistent disk behind the authorized API. Supabase PostgreSQL is the staging database. SQLite remains a local/demo fallback, not an accepted hosted substitute. Supabase Auth and Storage buckets are outside this round.
+- The proposed bill in the [architecture handoff](https://github.com/phatdat220707/voices-of-the-north/pull/15#issuecomment-6945928339) is an estimate requiring current pricing and Dat's approval. No purchase, subscription or account change is authorized here.
 
-The same review noted that Render's Source still displayed the former repository owner. Confirm the connected repository and branch after the transfer to `phatdat220707/voices-of-the-north`.
+## Current boundary
 
-## Check a deployed build
+PR #15 is not merged; OIDC/invite enforcement still needs implementation. Local signed demo identities and adapter checks do not establish invited onboarding, hosted PostgreSQL/RLS, storage isolation or recovery.
 
-1. Record the Render service, environment, source repository, branch, live commit and deployment time. Keep private dashboard links and credentials in the team Doc.
-2. Inspect the service's actual build command, start command and automatic-deploy setting. Record these commands in the Zheng handoff before changing them. The repository currently has no GitHub Actions workflow, so GitHub CI cannot provide this deployment evidence.
-3. Open the [deployed app](https://voices-of-the-north.onrender.com/voices-of-the-north-app.html) and [health endpoint](https://voices-of-the-north.onrender.com/api/health). Compare the served HTML with the Git blob for the recorded live commit. A successful health response alone does not verify access control or durable storage.
-4. Check [the story API](https://voices-of-the-north.onrender.com/api/stories) and a supported and unsupported question. Record source timestamps and which parts use real services, local retrieval or fixtures.
-5. Repeat the relevant staging acceptance checks with separate contributor and reviewer identities before publishing a contributor release.
+The last team-confirmed production check was Nov 16 at `a6b932a`. Main has since changed. No separately verified staging URL/deployed SHA is recorded; never present the current main SHA as a live version without checking. The Nov 19-20 staging dates were conditional targets whose prerequisites were not met; Zheng supplies revised dates after backend scope, access and budget are confirmed. Issue #3's existing Nov 30 acceptance date remains unless Dat changes it.
 
-## Handoffs still required
+## Configure staging explicitly
 
-- Zheng supplies the service-specific build/start/deploy commands, automatic-deploy configuration and post-transfer source confirmation.
-- Boris supplies the pending-review fixture and reproducible submission tests. Review his local Supabase proposal with Zheng before changing the documented SQLite baseline.
-- Dat confirms the person receiving bugs and takedown requests before closing Issue #2.
+1. Use a separate service, database and audio directory with synthetic data; do not reuse production recordings. Confirm the source is `phatdat220707/voices-of-the-north` after repository transfer.
+2. Record service environment, reviewed source SHA, actual build/start commands and automatic-deploy behavior. Do not infer CI/deployment from a GitHub merge. No project GitHub Actions workflow is currently established.
+3. Disable demo auth and demo admin. Use a stable server-only signing secret, require the PostgreSQL connection, and set `VTN_RECORDS_DIR` to the mounted disk. Do not silently fall back to local SQLite when invited staging expects PostgreSQL. Configure Google OAuth callback/origin, server-verified OIDC identity, allowlist, stable owner IDs and reviewer roles.
+4. Put credentials and invite/account lists directly in approved hosting secrets/private access channels, never public GitHub or a public-view Doc. Keep frontend tokens separate from server secrets.
+5. Record a public-safe staging URL and deployed SHA, then verify the served bundle matches that source. A healthy `/api/health` alone does not establish identity, durability or authorization.
 
-Share a public-safe commit, environment and result on the PR, put private test-access details in the team Doc, and notify Dat with the handoff link.
+## Hosted acceptance before real recording
+
+- Check invited, uninvited, guest, contributor A, contributor B and reviewer. B cannot read A's private text/audio, including direct and Range requests. Guests see only approved public material; contributors cannot grant themselves review roles or publish directly.
+- Run real consent -> record -> STT -> transcript/sharing review -> private submission -> reviewer approve/reject -> public source playback -> owner withdrawal. Keep cancelled and failed operations from displaying success or losing drafts. Check both server state and the local sharing badge, including saved overrides.
+- After withdrawal verify catalog, map, search, Ask and old audio/Range URLs deny public access. Re-check cache/offline/error paths and authenticated retries.
+- Restart/redeploy and verify database/audio persistence. Restore database and audio to compatible points, verify withdrawn content stays withdrawn, and repeat cross-account/guest denial. Provider snapshots alone do not prove this paired recovery.
+- Use phone and desktop browser sessions against the exact deployed SHA. Record pass/fail/not-run, sample procedure, expected/observed result, browser and safe evidence. Keep identity and raw-media evidence private.
+
+Dat authorizes a contributor release only after these gates and incident/takedown ownership are verified. Dat is the prototype coordination contact; Zheng operates the service. If recording gates remain open, retain recording on staging; separately verify read-only public scope.

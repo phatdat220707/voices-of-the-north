@@ -83,7 +83,9 @@
     chat: 'vtn.v2.chat',
     migration: 'vtn.v2.migrated',
     hint: 'vtn.v2.assistant-hint',
-    deleted: 'vtn.v2.deleted'
+    deleted: 'vtn.v2.deleted',
+    questions: 'vtn.v2.questions',
+    askContext: 'vtn.v2.ask-context'
   };
 
   VTN.SCOPES = ['private', 'family', 'community', 'public'];

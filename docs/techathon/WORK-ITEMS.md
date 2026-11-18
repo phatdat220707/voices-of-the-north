@@ -1,5 +1,7 @@
 # Techathon+ work items
 
+For the latest review SHA, merged UI, remaining defects and per-person next steps, read [STATUS.md](STATUS.md). These are acceptance targets, not claims that the current demo passes them.
+
 Open your [GitHub issue](https://github.com/phatdat220707/voices-of-the-north/milestone/1), then use the independent first step below and the [shared demo example](DEMO-FLOW.md). A handoff can block a specific check while local work proceeds. Use the issue to agree on interface changes and link PRs.
 
 ## [Prepare the repository and agree the launch scope](https://github.com/phatdat220707/voices-of-the-north/issues/2)
@@ -35,9 +37,9 @@ A reviewed repository setup, a shared demo URL and commit, and named reviewers a
 
 **Deliverable**
 
-An isolated staging environment with server-side account and recording permissions, persistent SQLite and private audio, and a documented backup and restore drill.
+An isolated staging environment with server-side account and recording permissions, Supabase PostgreSQL and persistent private audio on the Render disk, and a documented backup and restore drill.
 
-**Start now** Map the current identity and storage boundaries. Use synthetic identities and a temporary local store for authorization and restart checks. Prepare the access matrix and storage configuration independently of the UI.
+**Start now** Implement direct Google OIDC in FastAPI with an invite allowlist; own staging deployment/configuration. Map the current identity and storage boundaries. Use synthetic identities and a temporary local store for authorization and restart checks. Prepare the access matrix and storage configuration independently of the UI.
 
 **Handoff** Provide a staging URL and commit, the agreed role and access behavior, separate invited test identities, and restore evidence. Verify Google sign-in and persistent storage on staging. Share test access details privately.
 
@@ -45,7 +47,7 @@ An isolated staging environment with server-side account and recording permissio
 
 - [ ] Verify Google OpenID Connect identity on the server and restrict contribution to invited accounts. Check invited and uninvited sign-in, guest behavior, and disabled demo auth and demo admin grants in production configuration.
 - [ ] Use an explicit permissions matrix. Contributor B cannot fetch the metadata or audio of A's private recording, including by direct URL.
-- [ ] Verify SQLite and private audio survive restart and a staging backup/restore. Store media outside static file serving and document how withdrawal state survives restore.
+- [ ] Verify PostgreSQL and private audio survive restart and a coordinated staging backup/restore. Store media outside static file serving and document how withdrawal state survives restore.
 - [ ] Share a public-safe test summary and staging build reference. Get Dat's cost approval before provisioning paid resources.
 
 ## [Build consent, recording, transcript review, and submission](https://github.com/phatdat220707/voices-of-the-north/issues/4)

@@ -1,5 +1,7 @@
 # Main demo flow and shared interfaces
 
+Current revision and gates: [STATUS.md](STATUS.md). This is the target integrated flow; a local mock does not establish hosted acceptance.
+
 Use one Cantonese role-play recording to prove the full journey. An invited contributor gives consent, records and reviews a transcript, then submits it. A reviewer approves the submission. A signed-out visitor opens the published story, asks a supported question in Ask the Village, and plays the cited segment. This is the target for the integrated demo. The [baseline evidence](DEMO-EVIDENCE.md) records what the existing hosted demo already proves.
 
 Dat coordinates agreement on the interfaces below. Keep field names and existing routes where they fit. Record the agreed shape, an example, and any change in the relevant issue before another owner relies on it.
@@ -19,3 +21,9 @@ For the shared example, reuse the audio and an existing timestamp from the bundl
 3. **Extension.** Consider additional stories, languages, or presentation features after the main demo passes. Track any expansion in its own issue so it can proceed independently.
 
 For each handoff, link the issue and PR, name the commit and environment, give the sample input and expected versus observed result, and list checks that still need staging. When the reviewer has enough evidence, stop editing that scope. On integration, retest the changed boundary and one representative demo run.
+
+## Ask a Story and optional media
+
+Ask the Village reads the existing authorized archive. Ask a Story is the local question-pin -> bound recorder context demo merged in PR #17. It does not bypass invited contribution, consent, transcript review or moderation, and does not establish a shared server-backed question board. Keep its local scope visible in the demo.
+
+Audio/transcript remain the core story evidence. Photos and video are optional enhancements with truthful missing-media fallback and their own consent/source checks. Historical imagery, historical 3D reconstruction, map-engine migration and a one-question/multiple-answer community workflow are separate proposals pending Dat's scope decision. Do not treat filtering story years as a claim that the basemap depicts those years.

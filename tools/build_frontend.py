@@ -37,6 +37,7 @@ CSS_ORDER = [
     "assistant.css",
     "app-ext.css",
     "story-map.css",
+    "ask-story.css",
 ]
 JS_FIRST = ["generated/stories.gen.js"]
 

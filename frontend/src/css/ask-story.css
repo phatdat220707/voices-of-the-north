@@ -1,0 +1,405 @@
+/* ==========================================================================
+   Ask a Story — 提問求古（純前端新增層）
+   7:3 主次：錄音轉錄為主，提問為輔。此檔只新增選擇器，不覆蓋既有瘦身規則。
+   所有字級 >= --fs-min (0.875rem)；觸控熱區 >= 36px。
+   ========================================================================== */
+
+:root {
+  --ask-amber: #D97706;
+  --ask-amber-deep: #B45309;
+  --ask-amber-light: #FFF8E7;
+  --ask-oat: #F6F2E9;
+}
+
+/* ---------- 模組 1：子母伴生入口 ---------- */
+/* 與「開始錄音」CTA 等寬（calc(100% - 44px)）；高度取其約 1/3（CTA 約 198px → 66px）。
+   保留既有琥珀配色（淺底 + 深琥珀字 + 琥珀描邊），只把外形升級為長膠囊。 */
+.ask-entry-row {
+  display: flex;
+  justify-content: center;
+  margin: 10px 22px 0;
+}
+.ask-entry {
+  position: relative;
+  z-index: 6;
+  width: 100%;
+  height: 66px;
+  min-height: 66px;
+  padding: 0 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 2px solid var(--ask-amber);
+  border-radius: 999px;
+  background: var(--ask-amber-light);
+  color: var(--ask-amber-deep);
+  font-size: 1.0625rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: 0 10px 22px -12px rgba(180, 83, 9, 0.5);
+  -webkit-tap-highlight-color: transparent;
+}
+.ask-entry:hover { background: #FFEFCC; }
+.ask-entry:focus-visible { outline: 3px solid var(--ask-amber-deep); outline-offset: 2px; }
+.ask-entry i {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--ask-amber);
+  color: var(--ask-amber-light);
+  font-size: 1rem;
+}
+
+/* 地圖工具列內的伴生小按鈕：只顯示問號圖標，尺寸與其他工具按鈕一致 */
+.atlas-btn--ask {
+  width: 34px;
+  height: 34px;
+  min-height: 34px;
+  padding: 0;
+  border: 2px solid var(--ask-amber);
+  border-radius: 10px;
+  background: var(--ask-amber-light);
+  color: var(--ask-amber-deep);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+.atlas-btn--ask i { font-size: 0.875rem; }
+.atlas-btn--ask:hover { background: #FFEFCC; }
+
+/* ---------- 模組 2：二級提問抽屜 ---------- */
+/* 與多媒體 Overlay 一致：外層收斂到 min(430px,100vw) 並水平置中，
+   遮罩與面板都嚴格落在手機殼內，不會鋪滿整個桌面視口。 */
+.ask-layer {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  width: min(430px, 100vw);
+  z-index: 1200;
+  display: none;
+}
+.ask-layer.is-open { display: block; }
+/* 提問彈窗打開時鎖定文件級背景滾動（僅本彈窗存在時生效，不影響其他模組） */
+body:has(.ask-layer.is-open) { overflow: hidden; }
+.ask-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(28, 45, 36, 0.52);
+}
+.ask-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  /* 垂直置中於手機殼內、四邊留白；高度不溢視口 */
+  top: 50%;
+  bottom: auto;
+  transform: translateY(-50%);
+  width: 100%;
+  max-height: calc(100dvh - 40px);
+  display: flex;
+  flex-direction: column;
+  border-radius: 20px;
+  background: var(--ask-oat);
+  box-shadow: 0 16px 44px -20px rgba(28, 45, 36, 0.7);
+  overflow: hidden;
+}
+/* 開場動畫：由下滑入，結束定位由 translateY(-50%) 主控 */
+.ask-sheet { animation: ask-sheet-in 320ms cubic-bezier(0.33, 1, 0.68, 1); }
+@keyframes ask-sheet-in {
+  from { opacity: 0; margin-top: 24px; }
+  to { opacity: 1; margin-top: 0; }
+}
+/* 容器以 translateY(-50%) 垂直置中，開場動畫由 @keyframes 處理，不再改 transform */
+.ask-grab {
+  width: 44px;
+  height: 5px;
+  margin: 10px auto 2px;
+  border-radius: 99px;
+  background: var(--sage-line);
+  flex: none;
+}
+.ask-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 8px 20px 10px;
+  border-bottom: 1px solid var(--hairline);
+  flex: none;
+}
+.ask-head__titles { flex: 1; min-width: 0; }
+.ask-head__title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--forest-deep);
+}
+.ask-head__sub {
+  margin: 3px 0 0;
+  font-size: 0.9375rem;
+  color: var(--muted);
+}
+.ask-close {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--hairline);
+  border-radius: 50%;
+  background: var(--cream);
+  color: var(--ink-body);
+  font-size: 1rem;
+  cursor: pointer;
+}
+.ask-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 20px 24px;
+}
+.ask-field { margin-bottom: 18px; }
+.ask-label {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--ink-body);
+}
+.ask-textarea {
+  width: 100%;
+  min-height: 104px;
+  padding: 12px;
+  border: 1.5px solid var(--sage-line);
+  border-radius: 14px;
+  background: var(--cream);
+  color: var(--ink-body);
+  font-size: 1rem;
+  line-height: 1.55;
+  resize: vertical;
+}
+.ask-chips, .ask-roles, .ask-decades {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ask-chip {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1.5px solid var(--ask-amber);
+  border-radius: 18px;
+  background: var(--ask-amber-light);
+  color: var(--ask-amber-deep);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ask-chip[aria-pressed="true"] {
+  background: var(--ask-amber);
+  color: #fff;
+}
+.ask-select {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px;
+  border: 1.5px solid var(--sage-line);
+  border-radius: 12px;
+  background: var(--cream);
+  color: var(--ink-body);
+  font-size: 1rem;
+}
+.ask-mini-map {
+  position: relative;
+  height: 176px;
+  margin-top: 10px;
+  border: 1.5px solid var(--sage-line);
+  border-radius: 14px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 28% 34%, rgba(127, 166, 140, 0.55) 0 18%, transparent 19%),
+    radial-gradient(circle at 72% 68%, rgba(185, 205, 182, 0.5) 0 22%, transparent 23%),
+    linear-gradient(150deg, #EAF0E5 0%, #F1E3C1 100%);
+  cursor: grab;
+  touch-action: none;
+}
+.ask-mini-map.is-dragging { cursor: grabbing; }
+.ask-mini-map__privacy {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 96px;
+  height: 96px;
+  transform: translate(-50%, -50%);
+  border: 2px dashed rgba(217, 119, 6, 0.85);
+  border-radius: 50%;
+  background: rgba(255, 248, 231, 0.55);
+  pointer-events: none;
+}
+.ask-mini-map__pin {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -100%);
+  font-size: 1.5rem;
+  line-height: 1;
+  pointer-events: none;
+  filter: drop-shadow(0 3px 3px rgba(0, 0, 0, 0.3));
+}
+.ask-coord {
+  margin: 6px 0 0;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+.ask-submit {
+  width: 100%;
+  min-height: 52px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--ask-amber);
+  color: #fff;
+  font-size: 1.0625rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+.ask-submit:focus-visible { outline: 3px solid var(--ask-amber-deep); outline-offset: 2px; }
+.ask-tbd {
+  margin: 10px 0 0;
+  font-size: 0.875rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* ---------- 模組 3：提問圖標 ---------- */
+.vtn-qpin {
+  position: relative;
+  display: flex;
+  align-items: center;
+  max-width: 190px;
+  min-height: 34px;
+  padding: 6px 10px 6px 8px;
+  border: 2px dashed var(--ask-amber);
+  border-radius: 14px 14px 14px 2px;
+  background: var(--ask-amber-light);
+  color: var(--ask-amber-deep);
+  font-size: 0.875rem;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 4px 14px -6px rgba(180, 83, 9, 0.5);
+  -webkit-tap-highlight-color: transparent;
+}
+.vtn-qpin::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border: 2px solid rgba(217, 119, 6, 0.55);
+  border-radius: 18px 18px 18px 4px;
+  animation: ask-pulse-ring 2.2s ease-out infinite;
+  pointer-events: none;
+}
+@keyframes ask-pulse-ring {
+  0% { transform: scale(0.92); opacity: 0.85; }
+  70% { transform: scale(1.12); opacity: 0; }
+  100% { transform: scale(1.12); opacity: 0; }
+}
+.vtn-qpin__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- 模組 4：問題詳情卡 + 錄音橫幅 ---------- */
+.ask-card {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--vtn-nav-h) + 12px);
+  z-index: 1180;
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 16px 18px;
+  border: 2px solid var(--ask-amber);
+  border-radius: 16px;
+  background: var(--ask-amber-light);
+  box-shadow: 0 14px 34px -18px rgba(28, 45, 36, 0.7);
+  display: none;
+}
+.ask-card.is-open { display: block; }
+.ask-card__badge {
+  margin: 0 0 8px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--ask-amber-deep);
+}
+.ask-card__text {
+  margin: 0 0 14px;
+  font-size: 1.0625rem;
+  font-weight: 700;
+  line-height: 1.5;
+  color: var(--ink-body);
+}
+.ask-card__answer {
+  width: 100%;
+  min-height: 48px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--forest);
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+.ask-card__close {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ask-amber-deep);
+  font-size: 1.125rem;
+  cursor: pointer;
+}
+
+.vtn-ask-banner {
+  margin: 0 22px 16px;
+  padding: 12px 14px;
+  border: 2px solid var(--ask-amber);
+  border-radius: 14px;
+  background: var(--ask-amber-light);
+  color: var(--ask-amber-deep);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.vtn-ask-banner[hidden] { display: none; }
+.vtn-ask-banner__text { flex: 1; min-width: 0; }
+.vtn-ask-banner__unbind {
+  min-width: 44px;
+  min-height: 36px;
+  padding: 0 8px;
+  border: 1.5px solid var(--ask-amber);
+  border-radius: 12px;
+  background: var(--cream);
+  color: var(--ask-amber-deep);
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vtn-qpin::after { animation: none !important; }
+  .ask-sheet { transition: none; }
+}

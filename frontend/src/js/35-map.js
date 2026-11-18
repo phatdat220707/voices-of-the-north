@@ -1011,6 +1011,13 @@
     is3D: function () { return is3D; },
     reset: reset,
     status: function () { return engine; },
+    /* 只讀鉤子：供新增模組在同一地圖實例上掛載自訂圖層，不改變既有 pin / 畫線邏輯 */
+    raw: function () { return ml; },
+    flyToLngLat: function (lng, lat, zoom) {
+      if (!ml) return;
+      try { ml.flyTo({ center: [lng, lat], zoom: zoom || 13.5, essential: true }); }
+      catch (e) { /* ignore */ }
+    },
     debug: function () {
       if (engine !== 'maplibre' || !ml) return { engine: engine };
       var c = ml.getCenter();
