@@ -12,7 +12,11 @@ The 17-story/map candidate now includes both of the latest adjacent fixes:
   and removal of non-interactive timestamp buttons.
 
 The merged implementation was validated as `2ff9270` before this handoff
-document was added. The branch is `codex/today-integration-20261124`.
+document was added. The branch is
+`codex/today-integration-20261124` in the authoritative repository
+`phatdat220707/voices-of-the-north`, with the documentation head at
+`5537c41`. The integration PR is
+`https://github.com/phatdat220707/voices-of-the-north/pull/20`.
 
 ## Local verification
 
