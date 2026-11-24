@@ -1,4 +1,4 @@
-"""Verify transcript-only stories, video seeking, and playback after video failure.
+"""Verify media labelling, transcript-only stories, and playback and fallback.
 
 Run after building the frontend: python tools/verify/story_media.py
 """
@@ -119,9 +119,12 @@ def main():
 
             with story_page(browser, origin, "YL-001", changes=DEMO_VIDEO) as page:
                 page.locator("#storyDetail .story-media-launch__btn").click()
+                overlay = page.locator("#mediaOverlay")
                 video = page.locator("#storyVideo[controls]")
                 expect(video).to_be_visible()
-                start = seek_second_segment(page.locator("#mediaOverlay"))
+                expect(overlay.locator(".vtn-demo-tag")).to_have_text("示範")
+                expect(overlay.locator(".universal-media__disclosure")).to_be_visible()
+                start = seek_second_segment(overlay)
                 page.wait_for_function(
                     "start => { const video = document.getElementById('storyVideo'); "
                     "return video && video.videoWidth > 0 && !video.paused && !video.seeking && "
@@ -129,6 +132,21 @@ def main():
                     arg=start,
                 )
             print(f"PASS demo video and transcript seek to {start:g}s")
+
+            with story_page(browser, origin, "RL-001") as page:
+                overlay = page.locator("#mediaOverlay")
+                for language, heading in (
+                    ("zh-HK", "故事影片"),
+                    ("zh-CN", "故事视频"),
+                    ("en", "Story video"),
+                ):
+                    page.evaluate("(language) => VTN.i18n.setLang(language)", language)
+                    page.locator("#storyDetail .story-media-launch__btn").click()
+                    expect(overlay.locator("#storyVideo")).to_be_visible()
+                    expect(overlay.locator(".universal-media__hint")).to_contain_text(heading)
+                    expect(overlay.locator(".vtn-demo-tag, .universal-media__disclosure")).to_have_count(0)
+                    page.evaluate("VTN.media.close()")
+            print("PASS authorised interview video is labelled correctly in all three languages")
 
             with story_page(browser, origin, "YL-001", block_video=True, changes=DEMO_VIDEO) as page:
                 page.locator("#storyDetail .story-media-launch__btn").click()

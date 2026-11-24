@@ -120,7 +120,7 @@ for (const [lang, text] of Object.entries(expected)) {
       recordingBadge(value).getAttribute('data-i18n') === 'conf.' + level);
   }
   const box = new Element('div');
-  mediaFooter(box, { id: 'SYNTHETIC' }, 'image');
+  mediaFooter(box, { id: 'SYNTHETIC', rolePlayed: true }, 'image');
   check(lang + ' mock media footer has visible demo label',
     box.children[0].className === 'vtn-demo-tag' && box.children[0].textContent === text.demo);
 }

@@ -815,9 +815,9 @@
           }, { suppressSync: true });
         }
         if (VTN.store.clearScopeOverride) {
-          var overrideIds = [item.id];
-          if (recordId && recordId !== item.id) overrideIds.push(recordId);
-          overrideIds.forEach(function (id) { VTN.store.clearScopeOverride(id); });
+          // A built-in story can share an override key with a legacy local recording.
+          if (recordId || !VTN.store.records.get(item.id)) VTN.store.clearScopeOverride(item.id);
+          if (recordId && recordId !== item.id) VTN.store.clearScopeOverride(recordId);
         }
         VTN.store.withdrawn.add(item, '');
         VTN.ui.toast(t('withdraw.done'), 'success');

@@ -124,15 +124,21 @@
   }
 
   function appendMediaFooter(box, story, type) {
-    box.appendChild(U.node('span', { class: 'vtn-demo-tag', text: t('badge.demo') }));
+    var isImage = type === 'image';
+    var hintKey = isImage ? 'atlas.storyImageHint' : 'atlas.storyVideoHint';
+    if (story.rolePlayed) {
+      box.appendChild(U.node('span', { class: 'vtn-demo-tag', text: t('badge.demo') }));
+      hintKey = isImage ? 'atlas.imageHint' : 'atlas.videoHint';
+    }
     var hint = U.node('p', { class: 'universal-media__hint' });
-    hint.innerHTML = '<i class="fa-solid ' + (type === 'image' ? 'fa-image' : 'fa-video') +
+    hint.innerHTML = '<i class="fa-solid ' + (isImage ? 'fa-image' : 'fa-video') +
       '" aria-hidden="true"></i><span>' +
-      U.escapeHtml(t(type === 'image' ? 'atlas.imageHint' : 'atlas.videoHint')) + '</span>';
+      U.escapeHtml(t(hintKey)) + '</span>';
     box.appendChild(hint);
 
-    var disclosure = U.node('p', { class: 'universal-media__disclosure', text: t('atlas.mediaDisclosure') });
-    box.appendChild(disclosure);
+    if (story.rolePlayed) {
+      box.appendChild(U.node('p', { class: 'universal-media__disclosure', text: t('atlas.mediaDisclosure') }));
+    }
 
     var btn3d = U.node('button', { class: 'universal-media__3d vtn-btn vtn-btn--sm', type: 'button' });
     btn3d.innerHTML = '<i class="fa-solid fa-map-location-dot" aria-hidden="true"></i><span>' +
@@ -180,7 +186,8 @@
     } else {
       mediaEl = U.node('img', {
         class: 'universal-media__img', src: media.url,
-        alt: t('atlas.imageAlt', { title: storyTitleSafe(story) }), loading: 'lazy'
+        alt: t(story.rolePlayed ? 'atlas.imageAlt' : 'atlas.storyImageAlt', { title: storyTitleSafe(story) }),
+        loading: 'lazy'
       });
     }
 

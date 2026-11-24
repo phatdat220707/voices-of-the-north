@@ -257,13 +257,24 @@ async function main() {
   }
   {
     const h = harness();
-    const before = clone(h.VTN.store.records.get(h.record.id));
+    h.VTN.store.setSession({ email: 'owner@example.test', role: 'admin',
+      token: 'synthetic-signed-token' });
+    const store = h.VTN.store;
+    store.setScope(h.record, 'family');
+    store.records.merge([{ ...store.records.get(h.record.id), scope: 'public' }]);
+    const before = clone(store.records.get(h.record.id));
+    const patchesBefore = h.patches.length;
     const story = { id: h.record.id, segments: [] };
+    check('same-ID legacy record has a saved family override over public scope',
+      before.scope === 'public' && renderedScopeBadge(h) === 'scope.label:scope.family');
     const task = h.VTN.account.openWithdraw(story, { kind: 'story' });
     await flush(); h.reply(200);
     check('static story withdrawal succeeds', await task === true);
-    check('static story cannot patch a same-ID local record', h.patches.length === 0
-      && JSON.stringify(h.VTN.store.records.get(h.record.id)) === JSON.stringify(before));
+    check('static story cannot patch a same-ID local record', h.patches.length === patchesBefore
+      && JSON.stringify(store.records.get(h.record.id)) === JSON.stringify(before));
+    check('static story withdrawal preserves the same-ID legacy record override',
+      JSON.parse(h.local.get('scopes'))[h.record.id] === 'family'
+      && renderedScopeBadge(h) === 'scope.label:scope.family');
   }
   {
     const h = harness({ segments: [] });

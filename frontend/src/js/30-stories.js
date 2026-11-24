@@ -680,7 +680,8 @@
     if (media.type === 'image') {
       thumb.appendChild(U.node('img', {
         class: 'story-media-launch__img', src: media.url,
-        alt: t('atlas.imageAlt', { title: storyTitle(story) }), loading: 'lazy'
+        alt: t(story.rolePlayed ? 'atlas.imageAlt' : 'atlas.storyImageAlt', { title: storyTitle(story) }),
+        loading: 'lazy'
       }));
     } else {
       thumb.appendChild(U.node('span', {
