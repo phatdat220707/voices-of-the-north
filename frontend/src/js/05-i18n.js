@@ -224,6 +224,7 @@
       'story.scope': '分享範圍',
       'story.correct': '申請更正',
       'story.withdraw': '撤回故事',
+      'story.transcript': '逐字稿',
       'story.transcriptHint': '逐字稿（點句可跳聽）',
       'story.noAudio': '此故事未附音檔，暫時只能閱讀逐字稿。',
       'story.withdrawnSource': '此故事已撤回，來源已失效。',
@@ -638,6 +639,7 @@
       'media.close': '關閉',
       'media.noMedia': '該故事暫無影像資料，請收聽錄音',
       'media.fallback': '多媒體載入失敗，已切換為音頻',
+      'media.transcriptFallback': '多媒體載入失敗，請閱讀逐字稿',
 
       'aria.homeTrust': '我們的承諾',
       'aria.recTabs': '錄音狀態分類',
@@ -930,6 +932,7 @@
       'story.scope': '分享范围',
       'story.correct': '申请更正',
       'story.withdraw': '撤回故事',
+      'story.transcript': '逐字稿',
       'story.transcriptHint': '逐字稿（点句可跳听）',
       'story.noAudio': '此故事未附音频，暂时只能阅读逐字稿。',
       'story.withdrawnSource': '此故事已撤回，来源已失效。',
@@ -1344,6 +1347,7 @@
       'media.close': '关闭',
       'media.noMedia': '该故事暂无影像资料，请收听录音',
       'media.fallback': '多媒体加载失败，已切换为音频',
+      'media.transcriptFallback': '多媒体加载失败，请阅读逐字稿',
 
       'aria.homeTrust': '我们的承诺',
       'aria.recTabs': '录音状态分类',
@@ -1636,6 +1640,7 @@
       'story.scope': 'Sharing scope',
       'story.correct': 'Request correction',
       'story.withdraw': 'Withdraw story',
+      'story.transcript': 'Transcript',
       'story.transcriptHint': 'Transcript (tap a line to listen)',
       'story.noAudio': 'This story has no audio file; you can read the transcript only.',
       'story.withdrawnSource': 'This story was withdrawn; the source is no longer available.',
@@ -2050,6 +2055,7 @@
       'media.close': 'Close',
       'media.noMedia': 'No imagery for this story; please listen to the recording.',
       'media.fallback': 'Media failed to load; switched to audio.',
+      'media.transcriptFallback': 'Media failed to load. Read the transcript below.',
 
       'aria.homeTrust': 'Our commitment',
       'aria.recTabs': 'Recording status tabs',

@@ -3,7 +3,7 @@
  * -----------------------------------------------------------------------------
  * * 三級頁：全屏 Overlay，封裝 renderUniversalMedia（影片 / 圖片 / 音頻降級）
  * * 二級頁（半拉抽屜）有媒體時由 30-stories.js 顯示「查看多媒體故事」入口，點擊呼叫 open()
- * * 防呆（fail-closed）：媒體載入失敗（404）自動降級為音頻；關閉 Overlay 強制暫停影片與音頻
+ * * 影像載入失敗時，有錄音才切換至音頻；關閉 Overlay 時暫停播放
  * ========================================================================== */
 
 (function () {
@@ -82,35 +82,44 @@
 
   function open(story, playAt) {
     if (!story || !VTN.stories || !VTN.stories.resolveMedia) return;
+    var media = VTN.stories.resolveMedia(story);
+    if (media.type === 'none') return;
     ensureOverlay();
     currentStory = story;
 
-    var media = VTN.stories.resolveMedia(story);
     var mediaHost = overlayEl.querySelector('.media-overlay__media');
     var transcriptHost = overlayEl.querySelector('.media-overlay__transcript');
     mediaHost.textContent = '';
     transcriptHost.textContent = '';
     overlayEl.querySelector('.media-overlay__title').textContent = storyTitleSafe(story);
 
-    /* seekRef 讓降級（影片/圖片 404）能改寫活躍 seek，逐字稿回調始終有效 */
-    var seekRef = { fn: function () {} };
-    var activeSeek = function (sec) { if (seekRef.fn) seekRef.fn(sec); };
+    var audioSeek = story.audio ? function (sec) { VTN.audio.playStory(story.id, sec); } : null;
+    var seek = audioSeek;
+    function renderTranscript() {
+      if (!VTN.stories.buildTranscript) return;
+      transcriptHost.textContent = '';
+      transcriptHost.appendChild(VTN.stories.buildTranscript(story, seek && function (sec) { seek(sec); }));
+    }
 
     if (media.type === 'audio') {
-      seekRef.fn = renderAudioFallback(story, mediaHost, seekRef, false);
+      renderAudioFallback(story, mediaHost, false);
     } else {
-      seekRef.fn = renderRichMedia(story, media, mediaHost, seekRef);
+      var videoSeek = renderRichMedia(story, media, mediaHost, function () {
+        seek = audioSeek;
+        renderAudioFallback(story, mediaHost, true);
+        if (!seek) renderTranscript();
+      });
+      if (videoSeek) seek = videoSeek;
     }
-
-    if (VTN.stories.buildTranscript) {
-      transcriptHost.appendChild(VTN.stories.buildTranscript(story, activeSeek));
-    }
+    renderTranscript();
 
     overlayEl.hidden = false;
     document.body.classList.add('media-overlay-open');
 
     if (playAt !== undefined && playAt !== null) {
-      setTimeout(function () { activeSeek(Number(playAt) || 0); }, 80);
+      setTimeout(function () {
+        if (currentStory === story && seek) seek(Number(playAt) || 0);
+      }, 80);
     }
   }
 
@@ -138,11 +147,12 @@
     box.appendChild(btn3d);
   }
 
-  function renderRichMedia(story, media, host, seekRef) {
+  function renderRichMedia(story, media, host, onError) {
     host.textContent = '';
     var box = U.node('div', { class: 'universal-media' });
     var frame = U.node('div', { class: 'universal-media__frame' });
-    var initialFn;
+    var mediaEl;
+    var seek = null;
 
     if (media.type === 'video') {
       var video = U.node('video', {
@@ -150,17 +160,8 @@
         controls: true, playsinline: true, preload: 'metadata',
         src: media.url, 'aria-label': t('atlas.videoAria')
       });
-      frame.appendChild(video);
-      box.appendChild(frame);
-      appendMediaFooter(box, story, 'video');
-
-      var degraded = false;
-      video.addEventListener('error', function () {
-        if (degraded) return;
-        degraded = true;
-        renderAudioFallback(story, host, seekRef, true);
-      });
-      initialFn = function (sec) {
+      mediaEl = video;
+      seek = function (sec) {
         if (video.error) { VTN.ui.toast(t('atlas.videoError'), 'error'); return; }
         if (VTN.audio && VTN.audio.pauseStory) VTN.audio.pauseStory();
         var dur = video.duration;
@@ -177,31 +178,25 @@
         else video.addEventListener('loadedmetadata', start, { once: true });
       };
     } else {
-      var img = U.node('img', {
+      mediaEl = U.node('img', {
         class: 'universal-media__img', src: media.url,
         alt: t('atlas.imageAlt', { title: storyTitleSafe(story) }), loading: 'lazy'
       });
-      frame.appendChild(img);
-      box.appendChild(frame);
-      appendMediaFooter(box, story, 'image');
-
-      var degraded2 = false;
-      img.addEventListener('error', function () {
-        if (degraded2) return;
-        degraded2 = true;
-        renderAudioFallback(story, host, seekRef, true);
-      });
-      initialFn = function () {
-        VTN.ui.toast(t('atlas.imageSeekNote'), 'info');
-      };
     }
 
+    mediaEl.addEventListener('error', function () {
+      if (host.contains(mediaEl)) onError();
+    });
+    frame.appendChild(mediaEl);
+    box.appendChild(frame);
+    appendMediaFooter(box, story, media.type);
     host.appendChild(box);
-    return initialFn;
+    return seek;
   }
 
-  function renderAudioFallback(story, host, seekRef, isDegrade) {
+  function renderAudioFallback(story, host, failed) {
     host.textContent = '';
+    var message = failed ? (story.audio ? 'media.fallback' : 'media.transcriptFallback') : 'media.noMedia';
     var box = U.node('div', { class: 'universal-media universal-media--audio' });
     var fallback = U.node('div', { class: 'universal-media__fallback' });
     fallback.appendChild(U.node('span', {
@@ -209,19 +204,14 @@
     }));
     fallback.appendChild(U.node('p', {
       class: 'universal-media__fallbackText',
-      text: t(isDegrade ? 'media.fallback' : 'media.noMedia')
+      text: t(message)
     }));
     box.appendChild(fallback);
 
-    if (VTN.stories.audioPlayerNode) box.appendChild(VTN.stories.audioPlayerNode(story));
+    if (story.audio) box.appendChild(VTN.stories.audioPlayerNode(story));
     host.appendChild(box);
 
-    var audioSeek = function (sec) {
-      if (VTN.audio && VTN.audio.playStory) VTN.audio.playStory(story.id, sec);
-    };
-    if (seekRef) seekRef.fn = audioSeek;
-    if (isDegrade && VTN.ui && VTN.ui.toast) VTN.ui.toast(t('media.fallback'), 'info');
-    return audioSeek;
+    if (failed && VTN.ui && VTN.ui.toast) VTN.ui.toast(t(message), 'info');
   }
 
   VTN.media = {
