@@ -127,7 +127,7 @@ def main() -> None:
             reviewer = identity("publication-acceptance-reviewer", admin=True)
             policy = server.load_data()["consentPolicyVersion"]
 
-            def fixture(rid: str) -> tuple[dict, dict]:
+            def fixture(rid: str, **fields: object) -> tuple[dict, dict]:
                 original = {
                     "id": rid, "status": "done", "source": "live",
                     "title": "Synthetic approved contribution", "formalText": "originalproof transcript",
@@ -138,6 +138,7 @@ def main() -> None:
                     "mime": "audio/wav", "audioBase64": base64.b64encode(synthetic_wav(0)).decode(),
                     "location": {"area": "Yuen Long", "lat": 22.4445, "lng": 114.015, "radiusM": 800},
                 }
+                original.update(fields)
                 created = post("/api/records", original, owner)["record"]
                 check(rid + " creation is private/ready",
                       created["scope"] == "private" and created["reviewStatus"] == "ready", created)
@@ -228,13 +229,75 @@ def main() -> None:
                       "submittedAt", "reviewedAt", "reviewedBy", "reviewNote")))
             check("icon-only edit stays guest-readable",
                   client.get("/api/records/ACCEPT-METADATA").status_code == 200)
-            same_audio = dict(kept, iconKey="oral-history", audioBase64=original["audioBase64"])
+            partial_icon = post("/api/records", {
+                "id": "ACCEPT-METADATA", "status": "done", "iconKey": "oral-history", "requestedScope": "public",
+            }, owner)["record"]
+            check("partial icon edit preserves approved content and sharing scope",
+                  partial_icon["scope"] == "public" and partial_icon["reviewStatus"] == "approved"
+                  and partial_icon["formalText"] == kept["formalText"] and partial_icon["segments"] == kept["segments"])
+            same_audio = dict(partial_icon, audioBase64=original["audioBase64"])
             same_audio.pop("audioUrl", None)
             replay = post("/api/records", same_audio, owner)["record"]
             print("BOUNDARY identical audio reupload on metadata edit: " + json.dumps({
                 "scope": replay.get("scope"), "reviewStatus": replay.get("reviewStatus"),
                 "sameBytes": True,
             }, sort_keys=True), flush=True)
+
+            for field, value in (
+                ("title", "Revised contribution title"),
+                ("titleEn", "Revised English title"),
+                ("keywords", ["revisedkeyword"]),
+            ):
+                rid = "ACCEPT-REVIEW-" + field
+                _, approval = fixture(rid, titleEn="Initial English title", keywords=["originalproof"], segments=[])
+                edited = post("/api/records", {
+                    "id": rid, "status": "done", field: value, "requestedScope": "public",
+                }, owner)["record"]
+                check(field + " edit preserves unspecified transcript and audio",
+                      edited[field] == value and edited["formalText"] == approval["formalText"])
+                private_assertions(rid, edited, synthetic_wav(0))
+                query = value[0] if isinstance(value, list) else value
+                answer = post("/api/ask-village", {"question": query, "storyIds": [rid]})
+                check(field + " edit is hidden from guest Ask pending review", not answer["sources"])
+                post(f"/api/contributions/{rid}/submit", {
+                    "transcriptConfirmed": True, "requestedScope": "public", "policyVersion": policy,
+                }, owner)
+                post(f"/api/contributions/{rid}/review", {"approved": True, "approvedScope": "public"}, reviewer)
+                answer = post("/api/ask-village", {"question": query, "storyIds": [rid]})
+                check(field + " edit can be found after renewed approval", answer["storyId"] == rid)
+
+            for invalid in ("unknown", "inf", "NaN", -1, True):
+                response = client.post("/api/records", headers=owner, json={
+                    "id": "ACCEPT-INVALID-DURATION", "status": "done", "durationSec": invalid,
+                })
+                check("invalid duration rejected: " + repr(invalid), response.status_code == 400)
+            optional = post("/api/records", {"id": "ACCEPT-OPTIONAL-DURATION", "durationSec": None}, owner)
+            check("null duration can be omitted from measurement", optional["record"]["durationSec"] is None)
+
+            rid = "ACCEPT-LEGACY-DURATION"
+            _, approval = fixture(rid, durationSec="2.5")
+            legacy = dict(approval, durationSec="unknown", words=[{"end": "inf"}, {"end": "2.5"}],
+                          segments=[{"start": "nan", "end": "inf", "text": "Invalid timestamp"}],
+                          keywords=["legacydurationproof"])
+            connection = server._connect()
+            try:
+                connection.execute("UPDATE records SET data_json=? WHERE id=?", (json.dumps(legacy), rid))
+                connection.commit()
+            finally:
+                connection.close()
+            catalog = client.get("/api/stories")
+            check("legacy duration leaves guest catalog and healthy stories available",
+                  catalog.status_code == 200
+                  and {rid, "ACCEPT-REVIEW-keywords"} <= set(catalog.json()["visibleIds"]))
+            projected = next(story for story in catalog.json()["stories"] if story["id"] == rid)
+            check("legacy duration falls back to finite word timing",
+                  projected["durationSec"] == 2.5 and projected["segments"][0]["end"] == 2.5)
+            answer = post("/api/ask-village", {"question": "legacydurationproof", "storyIds": [rid]})
+            check("legacy duration keeps the guest Ask citation finite",
+                  answer["storyId"] == rid and answer["sources"][0]["end"] == 2.5)
+            answer = post("/api/ask-village", {"question": "revisedkeyword"})
+            check("legacy duration leaves other guest Ask results available",
+                  answer["storyId"] == "ACCEPT-REVIEW-keywords")
     print(f"ALL PASSED: {COUNT} publication acceptance assertions at {head}", flush=True)
 
 

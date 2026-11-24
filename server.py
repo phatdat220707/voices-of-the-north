@@ -25,6 +25,7 @@ import base64
 import hashlib
 import hmac
 import json
+import math
 import os
 import re
 import secrets
@@ -423,6 +424,7 @@ EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 SCOPES = {"private", "family", "community", "public"}
 SCOPE_ORDER = {"private": 0, "family": 1, "community": 2, "public": 3}
 REVIEW_SENSITIVE_FIELDS = {
+    "title", "titleEn", "keywords",
     "rawText", "formalText", "segments", "words", "qaList", "durationSec",
     "durationSource", "mime", "teller", "location", "villageKey", "year",
     "storyType", "topicKeys", "eraKey", "mood", "languageKey",
@@ -577,6 +579,16 @@ def _record_keywords(payload: dict) -> list[str]:
     return list(dict.fromkeys(values))[:30]
 
 
+def _finite_seconds(value: object) -> float | None:
+    if not isinstance(value, (int, float, str)) or isinstance(value, bool):
+        return None
+    try:
+        seconds = float(value)
+    except (ValueError, OverflowError):
+        return None
+    return seconds if math.isfinite(seconds) else None
+
+
 def _published_record_story(
     rid: str,
     data_json: str,
@@ -591,11 +603,8 @@ def _published_record_story(
     measured_end = 0.0
     for word in words:
         if isinstance(word, dict):
-            try:
-                measured_end = max(measured_end, float(word.get("end") or 0))
-            except (TypeError, ValueError):
-                pass
-    duration = float(payload.get("durationSec") or measured_end or 0)
+            measured_end = max(measured_end, _finite_seconds(word.get("end")) or 0.0)
+    duration = max(0.0, _finite_seconds(payload.get("durationSec")) or 0.0) or measured_end
     text = str(payload.get("formalText") or payload.get("rawText") or "").strip()
     segments = []
     raw_segments = payload.get("segments")
@@ -603,24 +612,23 @@ def _published_record_story(
         for segment in raw_segments:
             if not isinstance(segment, dict) or not str(segment.get("text") or "").strip():
                 continue
-            try:
-                start = max(0.0, float(segment.get("start") or 0))
-                end = max(start, float(segment.get("end") or start))
-            except (TypeError, ValueError):
+            start = _finite_seconds(segment.get("start") or 0)
+            end = _finite_seconds(segment.get("end") or 0)
+            if start is None or end is None:
                 continue
+            start = max(0.0, start)
             keywords = segment.get("keywords")
             segments.append({
                 "start": start,
-                "end": end,
+                "end": max(start, end),
                 "text": str(segment.get("text") or "")[:5000],
                 "keywords": [str(item) for item in keywords if str(item).strip()]
                 if isinstance(keywords, list) else [],
             })
     if not segments and text:
-        end = duration or float(payload.get("durationSec") or 0) or 1.0
         segments.append({
             "start": 0.0,
-            "end": max(1.0, end),
+            "end": max(1.0, duration),
             "text": text,
             "keywords": _record_keywords(payload),
         })
@@ -712,6 +720,12 @@ async def create_record(request: Request):
     if _static_story_for_id(rid):
         raise HTTPException(status_code=409, detail="錄音 ID 已保留給故事庫；請使用其他 ID")
 
+    duration = payload.get("durationSec")
+    if duration is not None:
+        seconds = _finite_seconds(duration)
+        if seconds is None or seconds < 0:
+            raise HTTPException(status_code=400, detail="錄音時長必須是有限的非負數")
+
     audio_data_url = payload.pop("audioDataURL", None)
     audio_b64 = payload.pop("audioBase64", None) or ""
     if not audio_b64 and isinstance(audio_data_url, str) and ";base64," in audio_data_url:
@@ -775,6 +789,9 @@ async def create_record(request: Request):
                 scope = existing[4] or "private"
                 created_at = int(existing[5])
                 previous = _json_record(existing[3])
+                # Omitted fields keep the content the reviewer actually saw.
+                for key in REVIEW_SENSITIVE_FIELDS & previous.keys():
+                    clean.setdefault(key, previous[key])
                 for key in (
                     "scope", "contributionFlow", "requestedScope", "reviewStatus",
                     "submittedAt", "reviewedBy", "reviewedAt", "reviewNote", "consentRef",
