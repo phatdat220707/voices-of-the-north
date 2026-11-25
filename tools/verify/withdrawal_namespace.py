@@ -176,8 +176,13 @@ def main() -> None:
                 "transcriptConfirmed": True, "requestedScope": "public", "policyVersion": policy,
             })
             check("ordinary owner submits own recording", response.status_code == 200, response.text)
+            submission_version = response.json()["record"]["submissionVersion"]
             response = client.post(f"/api/contributions/{rid}/review", headers=reviewer,
-                                   json={"approved": True, "approvedScope": "public"})
+                                   json={
+                                       "approved": True,
+                                       "approvedScope": "public",
+                                       "submissionVersion": submission_version,
+                                   })
             check("reviewer publishes ordinary recording", response.status_code == 200, response.text)
             check("approved owner audio is public", client.get(f"/api/records/{rid}/audio").content == audio_bytes)
             for headers, label in ((other, "non-owner"), ({}, "guest")):

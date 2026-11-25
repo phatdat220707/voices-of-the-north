@@ -9681,7 +9681,8 @@ window.VTN_WAVEFORMS = {"YL-001":[0.465,0.68,0.536,0.384,0.455,0.63,0.623,0.483,
         if (serverRecord.audioUrl) {
           patch.audioUrl = tokenizeAudioUrl(serverRecord.audioUrl);
         }
-        ['scope', 'requestedScope', 'reviewStatus', 'submittedAt', 'reviewedBy', 'reviewedAt', 'reviewNote']
+        ['scope', 'requestedScope', 'reviewStatus', 'submittedAt', 'submissionVersion',
+          'reviewedSubmissionVersion', 'reviewedBy', 'reviewedAt', 'reviewNote']
           .forEach(function (key) {
             if (Object.prototype.hasOwnProperty.call(serverRecord, key)) patch[key] = serverRecord[key];
           });
@@ -9739,13 +9740,14 @@ window.VTN_WAVEFORMS = {"YL-001":[0.465,0.68,0.536,0.384,0.455,0.63,0.623,0.483,
     });
   }
 
-  function reviewContribution(id, approved, approvedScope, note) {
+  function reviewContribution(id, approved, approvedScope, note, submissionVersion) {
     return request('/api/contributions/' + encodeURIComponent(id) + '/review', {
       method: 'POST',
       body: {
         approved: !!approved,
         approvedScope: approvedScope || 'private',
-        note: note || ''
+        note: note || '',
+        submissionVersion: submissionVersion
       },
       timeout: 12000
     });
@@ -15414,7 +15416,8 @@ window.VTN_WAVEFORMS = {"YL-001":[0.465,0.68,0.536,0.384,0.455,0.63,0.623,0.483,
                 scope: 'private',
                 requestedScope: updated.requestedScope || scopeSelect.value,
                 reviewStatus: updated.reviewStatus || 'submitted',
-                submittedAt: updated.submittedAt
+                submittedAt: updated.submittedAt,
+                submissionVersion: updated.submissionVersion
               }, { suppressSync: true });
               VTN.ui.toast(t('review.submitted'), 'success');
               ctx.close('submitted');
@@ -15451,7 +15454,8 @@ window.VTN_WAVEFORMS = {"YL-001":[0.465,0.68,0.536,0.384,0.455,0.63,0.623,0.483,
         rec.id,
         approved,
         approved ? (rec.requestedScope || 'private') : 'private',
-        ''
+        '',
+        rec.submissionVersion || rec.submittedAt
       ).then(function () {
         VTN.ui.toast(t(approved ? 'review.approvedToast' : 'review.rejectedToast'), 'success');
         pullAndRender();

@@ -1,11 +1,10 @@
-"""Reproduce two known publication findings with temporary synthetic data.
+"""Verify two previously reported publication findings remain closed.
 
 Run: python -X utf8 tools/verify/publication_findings.py
 
-This is a diagnostic, not a release acceptance suite. Exit 0 means the two
-reported defects DID reproduce. A fixed implementation should stop reproducing
-them; replace these expectations with acceptance assertions when fixing them.
-No live database, speech, language-model or object-storage service is used.
+This focused regression suite exits 0 when changed approved content and
+private-scope narrowing fail closed. No live database, speech, language-model
+or object-storage service is used.
 """
 from __future__ import annotations
 
@@ -42,8 +41,8 @@ def main() -> None:
     head = subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True,
     ).strip()
-    print("Diagnostic source HEAD: " + head, flush=True)
-    print("Exit 0 means known defects reproduced; it does not mean release acceptance.", flush=True)
+    print("Regression source HEAD: " + head, flush=True)
+    print("Exit 0 means both historical publication defects remain closed.", flush=True)
     with tempfile.TemporaryDirectory(prefix="vtn-publication-findings-") as tmp:
         temporary = Path(tmp)
         for name in (
@@ -111,8 +110,12 @@ def main() -> None:
                     "transcriptConfirmed": True, "requestedScope": "public", "policyVersion": policy,
                 })
                 submitted.raise_for_status()
+                submission_version = submitted.json()["record"]["submissionVersion"]
                 approved = client.post(f"/api/contributions/{rid}/review", headers=reviewer, json={
-                    "approved": True, "approvedScope": "public", "note": "Original content only",
+                    "approved": True,
+                    "approvedScope": "public",
+                    "note": "Original content only",
+                    "submissionVersion": submission_version,
                 })
                 approved.raise_for_status()
                 record = approved.json()["record"]
@@ -161,21 +164,19 @@ def main() -> None:
                 "ask_receives_replacement_text": answer.get("answer") == replacement["formalText"],
                 "ask_citation_start": (answer.get("sources") or [{}])[0].get("start"),
             }
-            print("OBSERVED P1 approved-content replacement " + json.dumps(content_observed, sort_keys=True),
+            print("CHECK approved-content replacement " + json.dumps(content_observed, sort_keys=True),
                   flush=True)
             require(
-                content_observed["returned_scope"] == "public"
-                and content_observed["returned_reviewStatus"] == "approved"
-                and all(content_observed[key] is True for key in (
-                    "original_review_preserved", "guest_receives_replacement_text",
-                    "guest_receives_replacement_audio", "catalogue_receives_replacement_text",
-                    "ask_inScope", "ask_receives_replacement_text",
-                )) and content_observed["ask_citation_start"] == 0,
-                "Approved-content finding no longer reproduces exactly; assess fixed acceptance behavior",
+                content_observed["returned_scope"] == "private"
+                and content_observed["returned_reviewStatus"] == "ready"
+                and content_observed["original_review_preserved"] is False
+                and content_observed["guest_record"] == 403
+                and content_observed["guest_audio"] == 403
+                and content_observed["catalogue_receives_replacement_text"] is False
+                and content_observed["ask_inScope"] is False,
+                "Changed approved content did not fail closed",
             )
-            print("REPRODUCED P1: owner replaced approved public text/audio without renewed review.", flush=True)
-            print("EXPECTED AFTER FIX: reject content replacement or require review before exposing replacement.",
-                  flush=True)
+            print("PASS changed approved text/audio returns to private review", flush=True)
 
             rid = "DIAGNOSTIC-NARROWING"
             _original, approval = create_and_approve(rid)
@@ -196,21 +197,18 @@ def main() -> None:
                 "guest_audio": client.get(f"/api/records/{rid}/audio").status_code,
                 "still_in_guest_catalogue": rid in catalogue.json()["visibleIds"],
             }
-            print("OBSERVED P1 privacy narrowing " + json.dumps(narrowing_observed, sort_keys=True), flush=True)
+            print("CHECK privacy narrowing " + json.dumps(narrowing_observed, sort_keys=True), flush=True)
             require(
-                narrowing_observed["returned_scope"] == "public"
-                and narrowing_observed["returned_requestedScope"] == "public"
-                and narrowing_observed["returned_reviewStatus"] == "approved"
-                and narrowing_observed["guest_record"] == 200
-                and narrowing_observed["guest_audio"] == 200
-                and narrowing_observed["still_in_guest_catalogue"] is True,
-                "Privacy-narrowing finding no longer reproduces exactly; assess fixed acceptance behavior",
+                narrowing_observed["returned_scope"] == "private"
+                and narrowing_observed["returned_requestedScope"] == "private"
+                and narrowing_observed["returned_reviewStatus"] == "ready"
+                and narrowing_observed["guest_record"] == 403
+                and narrowing_observed["guest_audio"] == 403
+                and narrowing_observed["still_in_guest_catalogue"] is False,
+                "Privacy narrowing did not fail closed",
             )
-            print("REPRODUCED P1: successful private-scope request left record/audio publicly available.",
-                  flush=True)
-            print("EXPECTED AFTER FIX: successful narrowing removes guest record/audio/catalogue access; "
-                  "unsupported changes must not falsely report success.", flush=True)
-    print("DIAGNOSTIC COMPLETE: 2 known P1 findings reproduced; this is not a release-pass result.", flush=True)
+            print("PASS private-scope narrowing removes guest record/audio/catalogue access", flush=True)
+    print("REGRESSION PASSED: 2 historical publication findings remain closed.", flush=True)
 
 
 if __name__ == "__main__":

@@ -177,7 +177,11 @@ def main() -> None:
             approved = client.post(
                 "/api/contributions/P1-CASE-AUDIO/review",
                 headers=reviewer,
-                json={"approved": True, "approvedScope": "public"},
+                json={
+                    "approved": True,
+                    "approvedScope": "public",
+                    "submissionVersion": submitted.json()["record"]["submissionVersion"],
+                },
             )
             check("approve fixture", approved.status_code == 200, approved.text)
             expected_audio = synthetic_wav(1)

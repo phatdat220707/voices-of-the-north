@@ -303,6 +303,15 @@ def _connect() -> Connection:
     return db_connect()
 
 
+def _lock_record(conn, record_id: str) -> None:
+    """Serialize submission/review state for a record across app workers."""
+    if is_postgres():
+        conn.execute(
+            "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))",
+            (record_id,),
+        )
+
+
 def _init_storage():
     RECORDS_DIR.mkdir(parents=True, exist_ok=True)
     conn = _connect()
@@ -447,9 +456,18 @@ def _can_manage_record(owner: str, who: dict) -> bool:
     return bool(who["role"] == "member" and owner and owner == who["email"])
 
 
-def _can_read_record(owner: str, who: dict, data_json: str = "", scope: str = "private") -> bool:
+def _can_read_record(
+    owner: str,
+    who: dict,
+    data_json: str = "",
+    scope: str = "private",
+    record_id: str = "",
+    withdrawn_ids: set[str] | None = None,
+) -> bool:
     if _can_manage_record(owner, who):
         return True
+    if record_id and record_id in (withdrawn_ids or set()):
+        return False
     payload = _json_record(data_json)
     return bool(
         (scope or "private") == "public"
@@ -557,6 +575,30 @@ def _content_changed(previous: dict, incoming: dict, has_new_audio: bool) -> boo
         if key in incoming and incoming.get(key) != previous.get(key):
             return True
     return False
+
+
+def _same_audio_file(path: str, data: bytes) -> bool:
+    if not path or not data:
+        return False
+    source = Path(path)
+    try:
+        if not source.is_file() or source.stat().st_size != len(data):
+            return False
+        with source.open("rb") as handle:
+            offset = 0
+            while True:
+                chunk = handle.read(512 * 1024)
+                if not chunk:
+                    return offset == len(data)
+                if data[offset:offset + len(chunk)] != chunk:
+                    return False
+                offset += len(chunk)
+    except OSError:
+        return False
+
+
+def _submission_version(payload: dict) -> str:
+    return str(payload.get("submissionVersion") or payload.get("submittedAt") or "")
 
 
 def _save_contribution(conn, rid: str, payload: dict, scope: str) -> None:
@@ -794,7 +836,8 @@ async def create_record(request: Request):
                     clean.setdefault(key, previous[key])
                 for key in (
                     "scope", "contributionFlow", "requestedScope", "reviewStatus",
-                    "submittedAt", "reviewedBy", "reviewedAt", "reviewNote", "consentRef",
+                    "submittedAt", "submissionVersion", "reviewedSubmissionVersion",
+                    "reviewedBy", "reviewedAt", "reviewNote", "withdrawnAt", "consentRef",
                 ):
                     if key in previous:
                         clean[key] = previous[key]
@@ -805,12 +848,19 @@ async def create_record(request: Request):
                 clean["requestedScope"] = requested_scope
                 clean["reviewStatus"] = "ready"
                 clean.pop("submittedAt", None)
+                clean.pop("submissionVersion", None)
+                clean.pop("reviewedSubmissionVersion", None)
                 clean.pop("reviewedBy", None)
                 clean.pop("reviewedAt", None)
                 clean.pop("reviewNote", None)
+                clean.pop("withdrawnAt", None)
             clean["owner"] = owner
+            audio_changed = bool(audio_bytes) and not _same_audio_file(
+                str(existing[0]) if existing and existing[0] else "",
+                audio_bytes,
+            )
             content_changed = (
-                _content_changed(previous, payload, bool(audio_bytes))
+                _content_changed(previous, payload, audio_changed)
                 if existing else False
             )
             previous_review = str(previous.get("reviewStatus") or "") if existing else ""
@@ -818,6 +868,8 @@ async def create_record(request: Request):
                 scope = "private"
                 clean["scope"] = "private"
                 clean["reviewStatus"] = "ready"
+                clean.pop("submissionVersion", None)
+                clean.pop("reviewedSubmissionVersion", None)
                 clean.pop("submittedAt", None)
                 clean.pop("reviewedBy", None)
                 clean.pop("reviewedAt", None)
@@ -830,6 +882,8 @@ async def create_record(request: Request):
                 clean["scope"] = scope
                 clean["requestedScope"] = requested_scope
                 clean["reviewStatus"] = "ready"
+                clean.pop("submissionVersion", None)
+                clean.pop("reviewedSubmissionVersion", None)
                 clean.pop("submittedAt", None)
                 clean.pop("reviewedBy", None)
                 clean.pop("reviewedAt", None)
@@ -896,10 +950,11 @@ async def list_records(request: Request, response: Response):
         ).fetchall()
     finally:
         conn.close()
+    excluded = _withdrawn_ids()
     records = [
         _row_to_record(data_json, has_audio, rid, owner, scope)
         for rid, data_json, has_audio, owner, scope in rows
-        if _can_read_record(owner, who, data_json, scope)
+        if _can_read_record(owner, who, data_json, scope, rid, excluded)
     ]
     return {"records": records, "count": len(records), "mode": STORAGE_MODE}
 
@@ -926,7 +981,7 @@ async def get_record_audio(rid: str, request: Request):
         conn.close()
     if not row:
         raise HTTPException(status_code=404, detail="音訊檔不存在")
-    if not _can_read_record(row[2], who, row[3], row[4]):
+    if not _can_read_record(row[2], who, row[3], row[4], rid, _withdrawn_ids()):
         raise HTTPException(status_code=403, detail="未獲授權收聽此錄音")
     if not row[1] or not row[0] or not Path(row[0]).is_file():
         raise HTTPException(status_code=404, detail="音訊檔不存在")
@@ -953,7 +1008,7 @@ async def get_record(rid: str, request: Request, response: Response):
         conn.close()
     if not row:
         raise HTTPException(status_code=404, detail="找不到該錄音")
-    if not _can_read_record(row[2], who, row[0], row[3]):
+    if not _can_read_record(row[2], who, row[0], row[3], rid, _withdrawn_ids()):
         raise HTTPException(status_code=403, detail="未獲授權查看此錄音")
     return _row_to_record(row[0], row[1], rid, row[2], row[3])
 
@@ -1037,6 +1092,7 @@ async def submit_contribution(rid: str, request: Request):
     conn = _connect()
     try:
         with _db_lock:
+            _lock_record(conn, rid)
             row = _load_contribution(conn, rid)
             if not row:
                 raise HTTPException(status_code=404, detail="找不到該錄音")
@@ -1058,9 +1114,11 @@ async def submit_contribution(rid: str, request: Request):
             payload["requestedScope"] = requested_scope
             payload["reviewStatus"] = "submitted"
             payload["submittedAt"] = datetime.now(timezone.utc).isoformat()
+            payload["submissionVersion"] = uuid.uuid4().hex
             payload["reviewedBy"] = None
             payload["reviewedAt"] = None
             payload["reviewNote"] = None
+            payload.pop("reviewedSubmissionVersion", None)
             _save_contribution(conn, rid, payload, "private")
             conn.commit()
             updated = _load_contribution(conn, rid)
@@ -1142,16 +1200,28 @@ async def review_contribution(rid: str, request: Request):
     approved_scope = str(body.get("approvedScope") or "private")
     if approved_scope not in SCOPES:
         raise HTTPException(status_code=400, detail="無效的核准分享範圍")
+    reviewed_version = str(
+        body.get("submissionVersion") or body.get("submittedAt") or ""
+    ).strip()
+    if not reviewed_version:
+        raise HTTPException(status_code=400, detail="審核必須指定已查看的提交版本")
     note = str(body.get("note") or "")[:400]
     conn = _connect()
     try:
         with _db_lock:
+            _lock_record(conn, rid)
             row = _load_contribution(conn, rid)
             if not row:
                 raise HTTPException(status_code=404, detail="找不到該錄音")
             payload = _json_record(row[0])
             if payload.get("reviewStatus") != "submitted":
                 raise HTTPException(status_code=409, detail="此錄音不在待審核狀態")
+            current_version = _submission_version(payload)
+            if not current_version or reviewed_version != current_version:
+                raise HTTPException(
+                    status_code=409,
+                    detail="提交版本已更新；請重新載入並核對最新內容",
+                )
             requested_scope = str(payload.get("requestedScope") or "private")
             scope_order = {"private": 0, "family": 1, "community": 2, "public": 3}
             if approved and scope_order[approved_scope] > scope_order.get(requested_scope, 0):
@@ -1165,6 +1235,7 @@ async def review_contribution(rid: str, request: Request):
             payload["reviewedBy"] = who["email"]
             payload["reviewedAt"] = now
             payload["reviewNote"] = note
+            payload["reviewedSubmissionVersion"] = current_version
             _save_contribution(conn, rid, payload, payload["scope"])
             conn.commit()
             updated = _load_contribution(conn, rid)
@@ -1584,24 +1655,27 @@ async def withdraw_story(story_id: str, request: Request):
                     raise HTTPException(status_code=404, detail="找不到故事")
                 if not _can_manage_record(record_row[2], who):
                     raise HTTPException(status_code=403, detail="只可撤回自己的故事")
+            _lock_record(conn, story_id)
             existing_withdrawal = conn.execute(
                 "SELECT withdrawn_at FROM withdrawals WHERE story_id=?",
                 (story_id,),
             ).fetchone()
             if existing_withdrawal:
-                return {"ok": True, "id": story_id, "withdrawnAt": existing_withdrawal[0]}
-            conn.execute(
-                "INSERT INTO withdrawals (story_id, withdrawn_at, by_user, reason) VALUES (?, ?, ?, ?) "
-                "ON CONFLICT(story_id) DO NOTHING",
-                (story_id, now, who["email"] or "visitor", str(body.get("reason") or "")[:400]),
-            )
-            now = conn.execute(
-                "SELECT withdrawn_at FROM withdrawals WHERE story_id=?", (story_id,)
-            ).fetchone()[0]
+                now = existing_withdrawal[0]
+            else:
+                conn.execute(
+                    "INSERT INTO withdrawals (story_id, withdrawn_at, by_user, reason) VALUES (?, ?, ?, ?) "
+                    "ON CONFLICT(story_id) DO NOTHING",
+                    (story_id, now, who["email"] or "visitor", str(body.get("reason") or "")[:400]),
+                )
+                now = conn.execute(
+                    "SELECT withdrawn_at FROM withdrawals WHERE story_id=?", (story_id,)
+                ).fetchone()[0]
             if record_row:
                 payload = _json_record(record_row[0])
                 payload["reviewStatus"] = "withdrawn"
                 payload["scope"] = "private"
+                payload["requestedScope"] = "private"
                 payload["withdrawnAt"] = now
                 _save_contribution(conn, story_id, payload, "private")
             conn.commit()

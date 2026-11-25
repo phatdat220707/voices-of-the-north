@@ -129,12 +129,16 @@ def main() -> None:
                 "contributionFlow": False,
                 "reviewStatus": "approved",
                 "reviewedBy": "attacker@example.test",
+                "submissionVersion": "forged-version",
+                "reviewedSubmissionVersion": "forged-version",
             },
         )
         check("forged moderation fields are accepted only as private ready record", (
             forged_create.status_code == 200
             and forged_create.json()["record"]["scope"] == "private"
             and forged_create.json()["record"]["reviewStatus"] == "ready"
+            and "submissionVersion" not in forged_create.json()["record"]
+            and "reviewedSubmissionVersion" not in forged_create.json()["record"]
         ), forged_create.text)
         check(
             "guest cannot read forged public record",
@@ -182,11 +186,16 @@ def main() -> None:
         check("submitted story remains private", submitted.json()["record"]["scope"] == "private")
         check("submitted review status", submitted.json()["record"]["reviewStatus"] == "submitted")
         submitted_at = submitted.json()["record"]["submittedAt"]
+        submitted_version = submitted.json()["record"]["submissionVersion"]
+        check("submission has an opaque version", bool(submitted_version))
         resync = dict(submitted.json()["record"])
         resync["scope"] = "public"
         resync["contributionFlow"] = False
         resync["reviewStatus"] = "approved"
         resync["reviewedBy"] = "attacker@example.test"
+        resync["submittedAt"] = "forged-time"
+        resync["submissionVersion"] = "forged-version"
+        resync["reviewedSubmissionVersion"] = "forged-version"
         resync["iconKey"] = "oral"
         resync.pop("audioUrl", None)
         resync["status"] = "pending_review"
@@ -195,6 +204,8 @@ def main() -> None:
         check("generic sync preserves submitted state", (
             synced.json()["record"]["reviewStatus"] == "submitted"
             and synced.json()["record"]["submittedAt"] == submitted_at
+            and synced.json()["record"]["submissionVersion"] == submitted_version
+            and "reviewedSubmissionVersion" not in synced.json()["record"]
             and synced.json()["record"]["scope"] == "private"
             and synced.json()["record"]["reviewedBy"] is None
         ), synced.text)
@@ -208,11 +219,18 @@ def main() -> None:
         approved = client.post(
             "/api/contributions/CON-OWNER-001/review",
             headers=auth_admin,
-            json={"approved": True, "approvedScope": "public", "note": "Synthetic review passed"},
+            json={
+                "approved": True,
+                "approvedScope": "public",
+                "note": "Synthetic review passed",
+                "submissionVersion": submitted_version,
+            },
         )
         check("reviewer approves submission", approved.status_code == 200, approved.text)
         check("approval applies requested scope", approved.json()["record"]["scope"] == "public")
         check("approval status recorded", approved.json()["record"]["reviewStatus"] == "approved")
+        check("approval records the reviewed submission version",
+              approved.json()["record"]["reviewedSubmissionVersion"] == submitted_version)
         check(
             "second contributor can read approved story",
             client.get("/api/records/CON-OWNER-001", headers=auth_b).status_code == 200,
@@ -244,7 +262,7 @@ def main() -> None:
         ), str(answer))
 
         create_record("CON-EDIT-006")
-        client.post(
+        edit_submitted = client.post(
             "/api/contributions/CON-EDIT-006/submit",
             headers=auth_a,
             json={
@@ -256,7 +274,11 @@ def main() -> None:
         client.post(
             "/api/contributions/CON-EDIT-006/review",
             headers=auth_admin,
-            json={"approved": True, "approvedScope": "public"},
+            json={
+                "approved": True,
+                "approvedScope": "public",
+                "submissionVersion": edit_submitted.json()["record"]["submissionVersion"],
+            },
         )
         metadata_edit = dict(client.get("/api/records/CON-EDIT-006", headers=auth_a).json())
         metadata_edit["iconKey"] = "oral"
@@ -289,7 +311,7 @@ def main() -> None:
         )
 
         create_record("CON-NARROW-007")
-        client.post(
+        narrow_submitted = client.post(
             "/api/contributions/CON-NARROW-007/submit",
             headers=auth_a,
             json={
@@ -301,7 +323,11 @@ def main() -> None:
         client.post(
             "/api/contributions/CON-NARROW-007/review",
             headers=auth_admin,
-            json={"approved": True, "approvedScope": "public"},
+            json={
+                "approved": True,
+                "approvedScope": "public",
+                "submissionVersion": narrow_submitted.json()["record"]["submissionVersion"],
+            },
         )
         narrow = dict(client.get("/api/records/CON-NARROW-007", headers=auth_a).json())
         narrow.pop("audioUrl", None)
@@ -356,7 +382,7 @@ def main() -> None:
                 "requestedScope": "public",
             },
         )
-        client.post(
+        invalid_submitted = client.post(
             "/api/contributions/CON-INVALID-004/submit",
             headers=auth_a,
             json={
@@ -370,7 +396,11 @@ def main() -> None:
             client.post(
                 "/api/contributions/CON-INVALID-004/review",
                 headers=auth_admin,
-                json={"approved": "false", "approvedScope": "public"},
+                json={
+                    "approved": "false",
+                    "approvedScope": "public",
+                    "submissionVersion": invalid_submitted.json()["record"]["submissionVersion"],
+                },
             ).status_code == 400,
         )
 
@@ -388,7 +418,7 @@ def main() -> None:
                 "requestedScope": "private",
             },
         )
-        client.post(
+        scope_submitted = client.post(
             "/api/contributions/CON-SCOPE-005/submit",
             headers=auth_a,
             json={
@@ -402,12 +432,16 @@ def main() -> None:
             client.post(
                 "/api/contributions/CON-SCOPE-005/review",
                 headers=auth_admin,
-                json={"approved": True, "approvedScope": "public"},
+                json={
+                    "approved": True,
+                    "approvedScope": "public",
+                    "submissionVersion": scope_submitted.json()["record"]["submissionVersion"],
+                },
             ).status_code == 409,
         )
 
         create_record("CON-REJECT-002", requested_scope="community")
-        client.post(
+        reject_submitted = client.post(
             "/api/contributions/CON-REJECT-002/submit",
             headers=auth_a,
             json={
@@ -419,7 +453,12 @@ def main() -> None:
         rejected = client.post(
             "/api/contributions/CON-REJECT-002/review",
             headers=auth_admin,
-            json={"approved": False, "approvedScope": "private", "note": "Needs correction"},
+            json={
+                "approved": False,
+                "approvedScope": "private",
+                "note": "Needs correction",
+                "submissionVersion": reject_submitted.json()["record"]["submissionVersion"],
+            },
         )
         check("reviewer rejects submission", rejected.status_code == 200, rejected.text)
         check("rejected story remains private", rejected.json()["record"]["scope"] == "private")
@@ -427,6 +466,59 @@ def main() -> None:
             "guest cannot read rejected story",
             client.get("/api/records/CON-REJECT-002").status_code == 403,
         )
+
+        create_record("CON-RACE-008")
+        first_submit = client.post(
+            "/api/contributions/CON-RACE-008/submit",
+            headers=auth_a,
+            json={
+                "transcriptConfirmed": True,
+                "requestedScope": "public",
+                "policyVersion": "CONSENT-2026-11-v2",
+            },
+        )
+        stale_version = first_submit.json()["record"]["submissionVersion"]
+        edit = dict(first_submit.json()["record"])
+        edit.pop("audioUrl", None)
+        edit["formalText"] = "new content the reviewer did not inspect"
+        client.post("/api/records", headers=auth_a, json=edit)
+        second_submit = client.post(
+            "/api/contributions/CON-RACE-008/submit",
+            headers=auth_a,
+            json={
+                "transcriptConfirmed": True,
+                "requestedScope": "public",
+                "policyVersion": "CONSENT-2026-11-v2",
+            },
+        )
+        current_version = second_submit.json()["record"]["submissionVersion"]
+        check("resubmission rotates the approval version", current_version != stale_version)
+        stale_approval = client.post(
+            "/api/contributions/CON-RACE-008/review",
+            headers=auth_admin,
+            json={
+                "approved": True,
+                "approvedScope": "public",
+                "submissionVersion": stale_version,
+            },
+        )
+        check("stale reviewer approval is rejected", stale_approval.status_code == 409)
+        pending = client.get("/api/contributions/CON-RACE-008", headers=auth_admin).json()
+        check("stale approval cannot publish newer content", (
+            pending["reviewStatus"] == "submitted"
+            and "CON-RACE-008" not in client.get("/api/stories").json()["visibleIds"]
+        ))
+        current_approval = client.post(
+            "/api/contributions/CON-RACE-008/review",
+            headers=auth_admin,
+            json={
+                "approved": True,
+                "approvedScope": "public",
+                "submissionVersion": current_version,
+            },
+        )
+        check("reviewer can approve the version actually loaded",
+              current_approval.status_code == 200, current_approval.text)
 
         print("\nALL PASSED: Issue #4 private contribution flow")
 

@@ -159,7 +159,8 @@
         if (serverRecord.audioUrl) {
           patch.audioUrl = tokenizeAudioUrl(serverRecord.audioUrl);
         }
-        ['scope', 'requestedScope', 'reviewStatus', 'submittedAt', 'reviewedBy', 'reviewedAt', 'reviewNote']
+        ['scope', 'requestedScope', 'reviewStatus', 'submittedAt', 'submissionVersion',
+          'reviewedSubmissionVersion', 'reviewedBy', 'reviewedAt', 'reviewNote']
           .forEach(function (key) {
             if (Object.prototype.hasOwnProperty.call(serverRecord, key)) patch[key] = serverRecord[key];
           });
@@ -217,13 +218,14 @@
     });
   }
 
-  function reviewContribution(id, approved, approvedScope, note) {
+  function reviewContribution(id, approved, approvedScope, note, submissionVersion) {
     return request('/api/contributions/' + encodeURIComponent(id) + '/review', {
       method: 'POST',
       body: {
         approved: !!approved,
         approvedScope: approvedScope || 'private',
-        note: note || ''
+        note: note || '',
+        submissionVersion: submissionVersion
       },
       timeout: 12000
     });

@@ -74,7 +74,10 @@ def main() -> None:
         "recordId": record_id,
         "submitted": submitted.json(),
         "reviewerQueue": "GET /api/contributions?status=submitted with an admin bearer token",
-        "approve": f"POST /api/contributions/{record_id}/review with approved=true and approvedScope=public",
+        "approve": (
+            f"POST /api/contributions/{record_id}/review with approved=true, "
+            "approvedScope=public and the submissionVersion returned by submit/list"
+        ),
     }, ensure_ascii=False, indent=2))
 
 

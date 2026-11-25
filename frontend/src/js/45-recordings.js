@@ -259,7 +259,8 @@
                 scope: 'private',
                 requestedScope: updated.requestedScope || scopeSelect.value,
                 reviewStatus: updated.reviewStatus || 'submitted',
-                submittedAt: updated.submittedAt
+                submittedAt: updated.submittedAt,
+                submissionVersion: updated.submissionVersion
               }, { suppressSync: true });
               VTN.ui.toast(t('review.submitted'), 'success');
               ctx.close('submitted');
@@ -296,7 +297,8 @@
         rec.id,
         approved,
         approved ? (rec.requestedScope || 'private') : 'private',
-        ''
+        '',
+        rec.submissionVersion || rec.submittedAt
       ).then(function () {
         VTN.ui.toast(t(approved ? 'review.approvedToast' : 'review.rejectedToast'), 'success');
         pullAndRender();

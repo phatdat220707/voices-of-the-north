@@ -100,7 +100,8 @@ def frontend_checks():
             }""")
             check("offline answers respect story filters", not filtered["answer"]["inScope"])
             expected = filtered["context"]["storyIds"]
-            check("query scope contains only selected types", expected == ["KT-002"], expected)
+            check("query scope contains only selected types",
+                  expected == ["RL-003", "KT-002"], expected)
 
             requests = []
 

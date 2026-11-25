@@ -79,11 +79,55 @@ VTN.api.records.sync(local).then(() => {
 """
 
 
+REVIEW_NODE_HARNESS = r"""
+const fs = require('fs');
+const vm = require('vm');
+const input = JSON.parse(fs.readFileSync(0, 'utf8'));
+let posted;
+const VTN = {
+  config: {apiBase: ''},
+  util: {},
+  store: {session: () => ({email: 'reviewer@example.test', role: 'admin', token: 'local-test'})}
+};
+const fetch = async (url, options) => {
+  posted = {url, ...options};
+  return {
+    ok: true,
+    headers: {get: () => 'application/json'},
+    json: async () => ({ok: true, approved: true, record: {id: 'REVIEW-UI'}})
+  };
+};
+const context = vm.createContext({window: {VTN}, fetch, FormData, setTimeout, clearTimeout});
+vm.runInContext(input.code, context, {filename: '15-api.js'});
+VTN.api.contributions.review(
+  input.recordId, true, 'public', 'checked', input.submissionVersion
+).then(() => {
+  process.stdout.write(JSON.stringify({
+    url: posted.url,
+    method: posted.method,
+    body: JSON.parse(posted.body)
+  }));
+}).catch(error => { console.error(error); process.exitCode = 1; });
+"""
+
+
 def frontend_sync(before: dict, response: dict) -> dict:
     run = subprocess.run(
         ["node", "-e", NODE_HARNESS], cwd=ROOT, text=True, encoding="utf-8",
         input=json.dumps({
             "before": before, "response": response,
+            "code": (ROOT / "frontend/src/js/15-api.js").read_text(encoding="utf-8"),
+        }), capture_output=True, check=True,
+    )
+    return json.loads(run.stdout)
+
+
+def frontend_review(record_id: str, submission_version: str) -> dict:
+    run = subprocess.run(
+        ["node", "-e", REVIEW_NODE_HARNESS], cwd=ROOT, text=True, encoding="utf-8",
+        input=json.dumps({
+            "recordId": record_id,
+            "submissionVersion": submission_version,
             "code": (ROOT / "frontend/src/js/15-api.js").read_text(encoding="utf-8"),
         }), capture_output=True, check=True,
     )
@@ -148,7 +192,10 @@ def main() -> None:
                 check(rid + " submission is private/submitted",
                       submitted["scope"] == "private" and submitted["reviewStatus"] == "submitted")
                 approved = post(f"/api/contributions/{rid}/review", {
-                    "approved": True, "approvedScope": "public", "note": "Original content only",
+                    "approved": True,
+                    "approvedScope": "public",
+                    "note": "Original content only",
+                    "submissionVersion": submitted["submissionVersion"],
                 }, reviewer)["record"]
                 check(rid + " approved public fixture",
                       approved["scope"] == "public" and approved["reviewStatus"] == "approved"
@@ -238,10 +285,9 @@ def main() -> None:
             same_audio = dict(partial_icon, audioBase64=original["audioBase64"])
             same_audio.pop("audioUrl", None)
             replay = post("/api/records", same_audio, owner)["record"]
-            print("BOUNDARY identical audio reupload on metadata edit: " + json.dumps({
-                "scope": replay.get("scope"), "reviewStatus": replay.get("reviewStatus"),
-                "sameBytes": True,
-            }, sort_keys=True), flush=True)
+            check("identical audio reupload on metadata edit preserves approval",
+                  replay["scope"] == "public" and replay["reviewStatus"] == "approved"
+                  and replay.get("reviewedSubmissionVersion") == partial_icon.get("reviewedSubmissionVersion"))
 
             for field, value in (
                 ("title", "Revised contribution title"),
@@ -259,12 +305,119 @@ def main() -> None:
                 query = value[0] if isinstance(value, list) else value
                 answer = post("/api/ask-village", {"question": query, "storyIds": [rid]})
                 check(field + " edit is hidden from guest Ask pending review", not answer["sources"])
-                post(f"/api/contributions/{rid}/submit", {
+                resubmitted = post(f"/api/contributions/{rid}/submit", {
                     "transcriptConfirmed": True, "requestedScope": "public", "policyVersion": policy,
-                }, owner)
-                post(f"/api/contributions/{rid}/review", {"approved": True, "approvedScope": "public"}, reviewer)
+                }, owner)["record"]
+                post(f"/api/contributions/{rid}/review", {
+                    "approved": True,
+                    "approvedScope": "public",
+                    "submissionVersion": resubmitted["submissionVersion"],
+                }, reviewer)
                 answer = post("/api/ask-village", {"question": query, "storyIds": [rid]})
                 check(field + " edit can be found after renewed approval", answer["storyId"] == rid)
+
+            race_id = "ACCEPT-STALE-APPROVAL"
+            race_record = {
+                "id": race_id, "status": "done", "source": "live",
+                "title": "Approval race fixture", "formalText": "version one transcript",
+                "rawText": "version one transcript", "durationSec": 1, "consentRef": policy,
+                "contributionFlow": True, "requestedScope": "public",
+                "segments": [{"start": 0, "end": 1, "text": "version one transcript"}],
+                "mime": "audio/wav",
+                "audioBase64": base64.b64encode(synthetic_wav(0)).decode(),
+            }
+            post("/api/records", race_record, owner)
+            first_submission = post(f"/api/contributions/{race_id}/submit", {
+                "transcriptConfirmed": True,
+                "requestedScope": "public",
+                "policyVersion": policy,
+            }, owner)["record"]
+            first_version = first_submission["submissionVersion"]
+            check("submission returns an opaque version", bool(first_version))
+            browser_review = frontend_review(race_id, first_version)
+            check("actual 15-api.js submits the reviewed version",
+                  browser_review["url"] == f"/api/contributions/{race_id}/review"
+                  and browser_review["method"] == "POST"
+                  and browser_review["body"]["submissionVersion"] == first_version,
+                  browser_review)
+            missing_version = client.post(
+                f"/api/contributions/{race_id}/review",
+                headers=reviewer,
+                json={"approved": True, "approvedScope": "public"},
+            )
+            check("approval without a reviewed version is rejected",
+                  missing_version.status_code == 400)
+            changed = dict(first_submission, formalText="version two transcript",
+                           rawText="version two transcript",
+                           segments=[{"start": 0, "end": 1, "text": "version two transcript"}])
+            changed.pop("audioUrl", None)
+            post("/api/records", changed, owner)
+            second_submission = post(f"/api/contributions/{race_id}/submit", {
+                "transcriptConfirmed": True,
+                "requestedScope": "public",
+                "policyVersion": policy,
+            }, owner)["record"]
+            second_version = second_submission["submissionVersion"]
+            check("resubmission rotates the version", second_version != first_version)
+            stale_review = client.post(
+                f"/api/contributions/{race_id}/review",
+                headers=reviewer,
+                json={
+                    "approved": True,
+                    "approvedScope": "public",
+                    "submissionVersion": first_version,
+                },
+            )
+            check("stale submission approval is rejected", stale_review.status_code == 409)
+            pending = client.get(f"/api/contributions/{race_id}", headers=reviewer).json()
+            check("stale approval leaves latest submission pending",
+                  pending["reviewStatus"] == "submitted"
+                  and pending.get("submissionVersion") == second_version
+                  and race_id not in client.get("/api/stories").json()["visibleIds"])
+            current_review = client.post(
+                f"/api/contributions/{race_id}/review",
+                headers=reviewer,
+                json={
+                    "approved": True,
+                    "approvedScope": "public",
+                    "submissionVersion": second_version,
+                },
+            )
+            check("current submission version can be approved",
+                  current_review.status_code == 200
+                  and current_review.json()["record"]["reviewedSubmissionVersion"] == second_version)
+
+            withdraw_id = "ACCEPT-WITHDRAW-TOMBSTONE"
+            _, approved = fixture(withdraw_id)
+            stale_withdrawn_at = "2026-11-25T00:00:00+00:00"
+            connection = server._connect()
+            try:
+                connection.execute(
+                    "INSERT INTO withdrawals (story_id, withdrawn_at, by_user, reason) VALUES (?, ?, ?, ?)",
+                    (withdraw_id, stale_withdrawn_at, "synthetic-reviewer", "legacy tombstone"),
+                )
+                connection.commit()
+            finally:
+                connection.close()
+            check("tombstoned public record is blocked directly",
+                  client.get(f"/api/records/{withdraw_id}").status_code == 403)
+            check("tombstoned public audio is blocked",
+                  client.get(f"/api/records/{withdraw_id}/audio").status_code == 403)
+            guest_ids = client.get("/api/records").json()["records"]
+            check("tombstoned public record is hidden from guest list",
+                  all(item.get("id") != withdraw_id for item in guest_ids))
+            repaired = client.post(
+                f"/api/stories/{withdraw_id}/withdraw",
+                headers=reviewer,
+                json={"reason": "repair legacy tombstone"},
+            )
+            check("idempotent withdrawal repairs stale public row", repaired.status_code == 200)
+            repaired_record = client.get(f"/api/records/{withdraw_id}", headers=owner).json()
+            check("repaired withdrawal makes both sharing fields private",
+                  repaired_record["scope"] == "private"
+                  and repaired_record["requestedScope"] == "private"
+                  and repaired_record["reviewStatus"] == "withdrawn",
+                  repaired_record)
 
             for invalid in ("unknown", "inf", "NaN", -1, True):
                 response = client.post("/api/records", headers=owner, json={
