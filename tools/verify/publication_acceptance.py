@@ -282,12 +282,20 @@ def main() -> None:
             check("partial icon edit preserves approved content and sharing scope",
                   partial_icon["scope"] == "public" and partial_icon["reviewStatus"] == "approved"
                   and partial_icon["formalText"] == kept["formalText"] and partial_icon["segments"] == kept["segments"])
-            same_audio = dict(partial_icon, audioBase64=original["audioBase64"])
+            sparse_icon = post("/api/records", {
+                "id": "ACCEPT-METADATA", "status": "done", "iconKey": "sparse-icon",
+            }, owner)["record"]
+            check("sparse icon-only save preserves existing sharing and approval",
+                  sparse_icon["scope"] == "public"
+                  and sparse_icon["requestedScope"] == "public"
+                  and sparse_icon["reviewStatus"] == "approved",
+                  sparse_icon)
+            same_audio = dict(sparse_icon, audioBase64=original["audioBase64"])
             same_audio.pop("audioUrl", None)
             replay = post("/api/records", same_audio, owner)["record"]
             check("identical audio reupload on metadata edit preserves approval",
                   replay["scope"] == "public" and replay["reviewStatus"] == "approved"
-                  and replay.get("reviewedSubmissionVersion") == partial_icon.get("reviewedSubmissionVersion"))
+                  and replay.get("reviewedSubmissionVersion") == sparse_icon.get("reviewedSubmissionVersion"))
 
             for field, value in (
                 ("title", "Revised contribution title"),
@@ -418,6 +426,55 @@ def main() -> None:
                   and repaired_record["requestedScope"] == "private"
                   and repaired_record["reviewStatus"] == "withdrawn",
                   repaired_record)
+            withdrawn_submit = client.post(
+                f"/api/contributions/{withdraw_id}/submit",
+                headers=owner,
+                json={
+                    "transcriptConfirmed": True,
+                    "requestedScope": "public",
+                    "policyVersion": policy,
+                },
+            )
+            check("withdrawn record cannot be resubmitted",
+                  withdrawn_submit.status_code == 409, withdrawn_submit.text)
+
+            lifecycle_id = "ACCEPT-WITHDRAWN-REVIEW"
+            lifecycle = {
+                "id": lifecycle_id, "status": "done", "source": "live",
+                "title": "Withdrawn lifecycle fixture", "formalText": "withdrawal lifecycle proof",
+                "rawText": "withdrawal lifecycle proof", "durationSec": 1, "consentRef": policy,
+                "contributionFlow": True, "requestedScope": "public",
+                "segments": [{"start": 0, "end": 1, "text": "withdrawal lifecycle proof"}],
+                "mime": "audio/wav",
+                "audioBase64": base64.b64encode(synthetic_wav(0)).decode(),
+            }
+            post("/api/records", lifecycle, owner)
+            lifecycle_submission = post(f"/api/contributions/{lifecycle_id}/submit", {
+                "transcriptConfirmed": True,
+                "requestedScope": "public",
+                "policyVersion": policy,
+            }, owner)["record"]
+            connection = server._connect()
+            try:
+                connection.execute(
+                    "INSERT INTO withdrawals (story_id, withdrawn_at, by_user, reason) VALUES (?, ?, ?, ?)",
+                    (lifecycle_id, "2026-11-25T00:01:00+00:00",
+                     "synthetic-reviewer", "withdrawn while submitted"),
+                )
+                connection.commit()
+            finally:
+                connection.close()
+            lifecycle_review = client.post(
+                f"/api/contributions/{lifecycle_id}/review",
+                headers=reviewer,
+                json={
+                    "approved": True,
+                    "approvedScope": "public",
+                    "submissionVersion": lifecycle_submission["submissionVersion"],
+                },
+            )
+            check("withdrawn submitted record cannot be approved",
+                  lifecycle_review.status_code == 409)
 
             for invalid in ("unknown", "inf", "NaN", -1, True):
                 response = client.post("/api/records", headers=owner, json={

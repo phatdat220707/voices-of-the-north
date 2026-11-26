@@ -24,9 +24,12 @@ then verifies:
 - title, English title, keyword and other review-sensitive edits return the
   record to private review;
 - byte-identical audio resubmission during an icon-only edit preserves an
-  existing approval;
+  existing approval, including sparse saves that omit sharing fields;
+- recording saves, submission, review, and withdrawal share the same
+  per-record PostgreSQL advisory lock;
 - withdrawn records cannot be read or played through direct record/audio
-  endpoints even if a legacy row still says public.
+  endpoints even if a legacy row still says public, and cannot re-enter the
+  submit/review lifecycle.
 
 ## Runnable pending-review fixture
 
@@ -41,3 +44,7 @@ account, and one submitted-private story. It prints the record ID, the
 reviewer queue request, and the review request. The approval request must pass
 the `submissionVersion` returned by the submit/list response. All data is
 synthetic and can be used with temporary/private storage.
+
+The PostgreSQL two-writer regression in
+`tools/test_postgres_review_atomicity.py` must run against a disposable
+loopback database. It intentionally refuses hosted database URLs.

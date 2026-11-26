@@ -785,6 +785,7 @@ async def create_record(request: Request):
                 detail=f"音訊超過 {MAX_AUDIO_BYTES // (1024 * 1024)}MB 上限",
             )
 
+    has_scope_intent = "requestedScope" in payload or "scope" in payload
     requested_scope = str(payload.get("requestedScope") or payload.get("scope") or "private")
     if requested_scope not in SCOPES:
         requested_scope = "private"
@@ -805,6 +806,7 @@ async def create_record(request: Request):
     conn = _connect()
     try:
         with _db_lock:
+            _lock_record(conn, rid)
             case_conflict = conn.execute(
                 "SELECT id FROM records WHERE lower(id)=lower(?) AND id<>?",
                 (rid, rid),
@@ -831,6 +833,10 @@ async def create_record(request: Request):
                 scope = existing[4] or "private"
                 created_at = int(existing[5])
                 previous = _json_record(existing[3])
+                if not has_scope_intent:
+                    requested_scope = str(
+                        previous.get("requestedScope") or scope or "private"
+                    )
                 # Omitted fields keep the content the reviewer actually saw.
                 for key in REVIEW_SENSITIVE_FIELDS & previous.keys():
                     clean.setdefault(key, previous[key])
@@ -876,6 +882,7 @@ async def create_record(request: Request):
                 clean.pop("reviewNote", None)
             elif (
                 existing and previous_review == "approved"
+                and has_scope_intent
                 and SCOPE_ORDER[requested_scope] < SCOPE_ORDER.get(scope, SCOPE_ORDER["public"])
             ):
                 scope = requested_scope
@@ -1108,6 +1115,10 @@ async def submit_contribution(rid: str, request: Request):
                 raise HTTPException(status_code=409, detail="錄音缺少目前版本的同意記錄")
             if not (payload.get("formalText") or payload.get("rawText")):
                 raise HTTPException(status_code=409, detail="提交前必須有逐字稿")
+            if payload.get("reviewStatus") == "withdrawn" or conn.execute(
+                "SELECT 1 FROM withdrawals WHERE story_id=?", (rid,)
+            ).fetchone():
+                raise HTTPException(status_code=409, detail="已撤回的錄音不可重新提交")
             if payload.get("reviewStatus") == "submitted":
                 raise HTTPException(status_code=409, detail="此錄音已在待審核佇列")
             payload["scope"] = "private"
@@ -1216,6 +1227,10 @@ async def review_contribution(rid: str, request: Request):
             payload = _json_record(row[0])
             if payload.get("reviewStatus") != "submitted":
                 raise HTTPException(status_code=409, detail="此錄音不在待審核狀態")
+            if conn.execute(
+                "SELECT 1 FROM withdrawals WHERE story_id=?", (rid,)
+            ).fetchone():
+                raise HTTPException(status_code=409, detail="已撤回的錄音不可審核")
             current_version = _submission_version(payload)
             if not current_version or reviewed_version != current_version:
                 raise HTTPException(
