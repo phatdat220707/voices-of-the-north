@@ -47,6 +47,7 @@
   background: #E7E2D3;
 }
 .atlas__canvas .maplibregl-canvas,
+.atlas__canvas .mapboxgl-canvas,
 .atlas__canvas .leaflet-tile-pane {
   filter: saturate(0.82) contrast(0.97) sepia(0.06);
 }
@@ -588,6 +589,27 @@
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.55);
   pointer-events: none;
 }
+
+.atlas-place-form,
+.atlas-place-results {
+  display: grid;
+  gap: 8px;
+}
+.atlas-place-form { grid-template-columns: minmax(0, 1fr) auto; }
+.atlas-place-form input {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  background: var(--cream);
+  color: var(--ink);
+  font: inherit;
+}
+.atlas-place-form p,
+.atlas-place-results { grid-column: 1 / -1; }
+.atlas-place-form p { margin: 0; }
+.atlas-place-results .vtn-btn { justify-content: flex-start; text-align: start; }
 
 /* ---------- 載入 / 空狀態 ---------- */
 .atlas__loading {
@@ -1269,6 +1291,7 @@ body:has(.page--stories.is-active) .vtn-ai-hint { display: none; }
 
 /* ---------- MapLibre / Leaflet 微調 ---------- */
 .atlas__canvas .maplibregl-ctrl-attrib,
+.atlas__canvas .mapboxgl-ctrl-attrib,
 .atlas__canvas .leaflet-control-attribution {
   background: rgba(253, 251, 244, 0.72);
   font-size: var(--fs-min);
@@ -1276,6 +1299,8 @@ body:has(.page--stories.is-active) .vtn-ai-hint { display: none; }
   padding: 2px 6px;
   border-radius: 6px;
 }
+.atlas__canvas .mapboxgl-ctrl-bottom-left,
+.atlas__canvas .mapboxgl-ctrl-bottom-right { bottom: 160px; }
 .atlas__canvas .leaflet-control-scale-line {
   background: rgba(253, 251, 244, 0.72);
   border-color: var(--forest-deep);

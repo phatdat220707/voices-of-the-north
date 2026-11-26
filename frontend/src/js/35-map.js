@@ -1,10 +1,7 @@
 /* =============================================================================
- * 35-map — 故事地圖（MapLibre GL JS 3D 主引擎 + Leaflet 2D 兜底）
+ * 35-map — 故事地圖（可選 Mapbox GL JS、MapLibre / Leaflet 兜底）
  * -----------------------------------------------------------------------------
- * 為什麼是 MapLibre 而不是 Mapbox：
- *   * 同樣做到 2D/3D、pitch、建築擠出，但不需要 access token；
- *   * 底圖用 OpenFreeMap（免費、無 key），Mapbox 免費額度用完會即場斷圖；
- *   * 失敗時自動退回 Leaflet + OSM，再失敗才用手繪示意圖，路演不會開天窗。
+ * Mapbox 由後端配置選用。免費路徑為 OpenFreeMap、Leaflet + OSM、手繪示意圖。
  *
  * 私隱：
  *   * 只畫約 800 米模糊圈，永不顯示精確 GPS；
@@ -25,18 +22,26 @@
   var MAPLIBRE_VERSION = '4.7.1';
   var MAPLIBRE_CDN = 'https://cdn.jsdelivr.net/npm/maplibre-gl@' + MAPLIBRE_VERSION + '/dist/';
   var DEFAULT_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
+  var MAPBOX_CDN = 'https://api.mapbox.com/mapbox-gl-js/v3.35.0/';
   var LEAFLET_VERSION = '1.9.4';
   var LEAFLET_CDN = 'https://cdn.jsdelivr.net/npm/leaflet@' + LEAFLET_VERSION + '/dist/';
   var HK_CENTER = [114.085, 22.468];
   var STYLE_TIMEOUT_MS = 11000;
   var LOAD_TIMEOUT_MS = 12000;
   var PIN_MIN_ZOOM = 9.4;
+  var HISTORICAL_YEARS = { 1960: 1963, 1970: 1976, 1980: 1982 };
 
   var el = null;
-  var ml = null;                 // MapLibre 實例
+  var ml = null;                 // Mapbox 或 MapLibre 實例
+  var glLibrary = null;
   var leaflet = null;            // Leaflet 實例（兜底）
   var leafletLayer = null;
-  var engine = 'idle';           // idle | loading | maplibre | leaflet | failed
+  var engine = 'idle';
+  var attempt = 0;
+  var mapConfig = {};
+  var mapboxFailed = false;
+  var activeHistory = null;
+  var historyFailures = {};
   var markers = {};
   var is3D = false;
   var booted = false;
@@ -54,6 +59,7 @@
 
   function t(key, vars) { return VTN.i18n.t(key, vars); }
   function byId(id) { return document.getElementById(id); }
+  function hasGL() { return ml && (engine === 'mapbox' || engine === 'maplibre'); }
 
   /* =========================================================================
    * 1. 圖標與色板（一級資訊）
@@ -157,11 +163,14 @@
   }
 
   /* =========================================================================
-   * 4. MapLibre：建立與圖層
+   * 4. GL 引擎與圖層
    * ======================================================================= */
   function setNote(key) {
     var note = byId('mapTilesNote');
-    if (note) note.textContent = t(key);
+    if (note) {
+      note.setAttribute('data-i18n', key);
+      note.textContent = t(key);
+    }
   }
 
   function hideLoading() {
@@ -169,90 +178,153 @@
     if (loading) loading.classList.add('is-hidden');
   }
 
-  function createMapLibre() {
-    engine = 'loading';
-    var styleUrl = window.VTN_MAP_STYLE || DEFAULT_STYLE;
-    loadCss(MAPLIBRE_CDN + 'maplibre-gl.css', 'maplibre-css');
+  function disposeGL() {
+    var map = ml;
+    stopFuzzPulse();
+    Object.keys(markers).forEach(function (id) { markers[id].remove(); });
+    markers = {};
+    clearHistoryTimer();
+    activeHistory = null;
+    ml = null;
+    glLibrary = null;
+    if (map) map.remove();
+  }
 
-    loadScript(MAPLIBRE_CDN + 'maplibre-gl.js', 'maplibre-js').then(function () {
-      if (!window.maplibregl) throw new Error('maplibre-missing');
-      if (window.maplibregl.supported && !window.maplibregl.supported({ failIfMajorPerformanceCaveat: false })) {
-        throw new Error('webgl-unsupported');
+  function createGL(kind, camera) {
+    engine = 'loading';
+    var version = ++attempt;
+    var mapbox = kind === 'mapbox';
+    var cdn = mapbox ? MAPBOX_CDN : MAPLIBRE_CDN;
+    var file = mapbox ? 'mapbox-gl' : 'maplibre-gl';
+    var map, timer;
+    var loaded = false;
+    var library = function () { return mapbox ? window.mapboxgl : window.maplibregl; };
+
+    function fail() {
+      if (version !== attempt) return;
+      clearTimeout(timer);
+      if (!mapbox) { fallbackToLeaflet(kind); return; }
+      var previous = null;
+      if (loaded) {
+        previous = {
+          center: map.getCenter(), zoom: map.getZoom(), bearing: map.getBearing(),
+          pitch: map.getPitch(), padding: map.getPadding()
+        };
       }
-      var loaded = false;
-      ml = new window.maplibregl.Map({
+      mapboxFailed = true;
+      disposeGL();
+      createGL('maplibre', previous);
+    }
+
+    loadCss(cdn + file + '.css', kind + '-css');
+    var script = library() ? Promise.resolve() : loadScript(cdn + file + '.js', kind + '-js');
+    script.then(function () {
+      if (version !== attempt) return;
+      glLibrary = library();
+      if (!glLibrary || (glLibrary.supported && !glLibrary.supported({
+        failIfMajorPerformanceCaveat: false
+      }))) { fail(); return; }
+      var options = {
         container: el,
-        style: styleUrl,
+        style: mapbox ? 'mapbox://styles/mapbox/standard' :
+          (mapboxFailed ? DEFAULT_STYLE : (window.VTN_MAP_STYLE || DEFAULT_STYLE)),
         center: HK_CENTER,
         zoom: 12,
         pitch: 0,
         bearing: 0,
         maxPitch: 70,
-        attributionControl: false,
+        attributionControl: mapbox,
         dragRotate: true,
         antialias: true
-      });
+      };
+      if (mapbox) {
+        options.accessToken = mapConfig.mapbox.token;
+        options.projection = 'mercator';
+        options.config = { basemap: { lightPreset: 'dusk', show3dObjects: is3D } };
+      }
+      ml = map = new glLibrary.Map(Object.assign(options, camera || {}));
+      timer = setTimeout(fail, STYLE_TIMEOUT_MS);
 
-      /* 署名放在自訂的 #mapTilesNote 內，避免與底部年代軸打架 */
-      var styleTimer = setTimeout(function () {
-        if (!loaded) fallbackToLeaflet('style-timeout');
-      }, STYLE_TIMEOUT_MS);
-
-      ml.on('load', function () {
+      map.on('load', function () {
+        if (version !== attempt) return;
         loaded = true;
-        clearTimeout(styleTimer);
-        engine = 'maplibre';
+        clearTimeout(timer);
+        engine = kind;
         el.classList.add('is-ready');
         el.classList.remove('is-failed');
         hideLoading();
-        setNote('atlas.tiles.maplibre');
+        setNote(mapbox ? 'atlas.tiles.mapbox' :
+          (mapboxFailed ? 'atlas.tiles.freeFallback' : 'atlas.tiles.maplibre'));
         addStorySources();
-        render(true);
-        fitAll();
-        ml.on('moveend', updateViewportCount);
+        if (is3D) add3DBuildings();
+        render(!camera);
+        map.on('moveend', function () {
+          updateViewportCount();
+          updateHistoryNote();
+        });
         updateViewportCount();
       });
 
-      ml.on('error', function (event) {
-        var message = event && event.error ? String(event.error.message || '') : '';
-        if (!loaded && /style|sprite|glyphs|source|network|fetch/i.test(message)) {
-          /* 只記錄；真正降級交由 styleTimer 決定，避免個別 tile 404 就全盤放棄 */
-          if (window.console) console.warn('[VTN] map style warning', message);
+      map.on('error', function (event) {
+        if (version !== attempt) return;
+        var sourceId = event.sourceId || (event.source && event.source.id) || '';
+        if (sourceId.indexOf('vtn-history-') === 0) {
+          if (activeHistory && activeHistory.id === sourceId) failHistory();
+          return;
         }
+        var status = Number(event.error && (event.error.status || event.error.statusCode));
+        if (mapbox && (status === 401 || status === 403 || status === 429 ||
+            (status >= 500 && !sourceId))) fail();
       });
 
-      ml.on('click', function (event) {
+      map.on('sourcedata', function (event) {
+        if (version === attempt && activeHistory && event.sourceId === activeHistory.id &&
+            !activeHistory.ready && event.tile && event.tile.state === 'loaded') {
+          activeHistory.ready = true;
+          clearHistoryTimer();
+          updateHistoryNote();
+        }
+      });
+      if (mapbox) map.on('webglcontextlost', fail);
+
+      map.on('click', function (event) {
+        if (version !== attempt) return;
         var features = [];
         try {
-          features = ml.queryRenderedFeatures(event.point, { layers: ['vtn-cluster'] });
+          features = map.queryRenderedFeatures(event.point, { layers: ['vtn-cluster'] });
         } catch (e) { features = []; }
         if (features.length) {
           /* 低縮放聚合氣泡：展開視角，不算「點開故事」 */
           if (VTN.metrics) VTN.metrics.track('cluster.click', {
             count: Number(features[0].properties.point_count) || 0,
-            zoom: ml.getZoom(), engine: 'maplibre'
+            zoom: map.getZoom(), engine: kind
           });
           var clusterId = features[0].properties.cluster_id;
-          var source = ml.getSource('vtn-stories');
+          var source = map.getSource('vtn-stories');
           if (source && source.getClusterExpansionZoom) {
-            source.getClusterExpansionZoom(clusterId).then(function (zoom) {
-              ml.easeTo({
+            var expand = function (zoom) {
+              if (map !== ml) return;
+              map.easeTo({
                 center: features[0].geometry.coordinates,
                 zoom: zoom + 0.2,
                 duration: 620
               });
-            }).catch(function () { /* ignore */ });
+            };
+            if (mapbox) {
+              source.getClusterExpansionZoom(clusterId, function (error, zoom) {
+                if (!error) expand(zoom);
+              });
+            } else {
+              source.getClusterExpansionZoom(clusterId).then(expand).catch(function () { /* ignore */ });
+            }
           }
           return;
         }
         if (VTN.sheet && VTN.sheet.isOpen()) VTN.sheet.close('map');
       });
 
-      ml.on('zoom', syncPinVisibility);
-    }).catch(function (error) {
-      if (window.console) console.warn('[VTN] maplibre unavailable', error && error.message);
-      fallbackToLeaflet('maplibre');
-    });
+      map.on('zoom', syncPinVisibility);
+    }).catch(fail);
   }
 
   function addStorySources() {
@@ -316,7 +388,7 @@
       filter: ['has', 'point_count'],
       layout: {
         'text-field': ['get', 'point_count_abbreviated'],
-        'text-font': ['Noto Sans Regular'],
+        'text-font': engine === 'mapbox' ? ['Open Sans Regular'] : ['Noto Sans Regular'],
         'text-size': 12,
         'text-allow-overlap': true
       },
@@ -357,7 +429,88 @@
     return undefined;
   }
 
+  function syncBuildingVisibility() {
+    var show = is3D && !activeHistory;
+    if (engine === 'mapbox') {
+      if (ml.getConfigProperty('basemap', 'show3dObjects') !== show) {
+        ml.setConfigProperty('basemap', 'show3dObjects', show);
+      }
+    } else if (ml.getLayer('vtn-buildings-3d')) {
+      ml.setLayoutProperty('vtn-buildings-3d', 'visibility', show ? 'visible' : 'none');
+    }
+  }
+
+  function clearHistoryTimer() {
+    if (!activeHistory) return;
+    clearTimeout(activeHistory.timer);
+    activeHistory.timer = null;
+  }
+
+  function updateHistoryNote() {
+    var note = byId('mapHistoryNote');
+    var decade = state.eraYear;
+    var year = HISTORICAL_YEARS[decade];
+    var key = decade === null ? '' : decade >= 1990 ? 'atlas.history.modern' : 'atlas.history.missing';
+    if (activeHistory) {
+      var bounds = ml.getBounds();
+      var extent = activeHistory.bounds;
+      var inView = bounds.getWest() < extent[2] && bounds.getEast() > extent[0] &&
+        bounds.getSouth() < extent[3] && bounds.getNorth() > extent[1] &&
+        ml.getZoom() >= activeHistory.minzoom;
+      if (!inView) {
+        clearHistoryTimer();
+        key = 'atlas.history.outside';
+      } else if (activeHistory.ready) {
+        key = 'atlas.history.ready';
+      } else {
+        key = 'atlas.history.loading';
+        if (!activeHistory.timer) activeHistory.timer = setTimeout(failHistory, STYLE_TIMEOUT_MS);
+      }
+    }
+    if (!note) return;
+    var label = key ? t(key, { y: year || decade }) : '';
+    if (note.textContent !== label) note.textContent = label;
+    note.hidden = !key;
+  }
+
+  function syncHistory() {
+    var year = HISTORICAL_YEARS[state.eraYear];
+    var entry = (mapConfig.history || {})[year];
+    var mtsId = 'vtn-history-' + year + '-mts';
+    var localId = 'vtn-history-' + year + '-local';
+    var useMts = entry && engine === 'mapbox' && entry.tileset && !historyFailures[mtsId];
+    var id = useMts ? mtsId : entry && entry.local && !historyFailures[localId] ? localId : null;
+    if ((activeHistory && activeHistory.id || null) !== id) {
+      if (activeHistory) {
+        clearHistoryTimer();
+        if (ml.getLayer(activeHistory.id)) ml.removeLayer(activeHistory.id);
+        if (ml.getSource(activeHistory.id)) ml.removeSource(activeHistory.id);
+        activeHistory = null;
+      }
+      if (id) {
+        var source = {
+          type: 'raster', tileSize: 256, bounds: entry.bounds,
+          minzoom: entry.minzoom, maxzoom: entry.maxzoom
+        };
+        if (useMts) source.url = 'mapbox://' + entry.tileset;
+        else source.tiles = [window.location.origin + '/assets/map-history/' + year + '/{z}/{x}/{y}.png'];
+        activeHistory = { id: id, bounds: entry.bounds, minzoom: entry.minzoom };
+        ml.addSource(id, source);
+        ml.addLayer({ id: id, type: 'raster', source: id, paint: { 'raster-fade-duration': 0 } }, 'vtn-heat');
+      }
+      syncBuildingVisibility();
+    }
+    updateHistoryNote();
+  }
+
+  function failHistory() {
+    if (!activeHistory) return;
+    historyFailures[activeHistory.id] = true;
+    syncHistory();
+  }
+
   function add3DBuildings() {
+    if (engine === 'mapbox') { syncBuildingVisibility(); return; }
     if (!ml || ml.getLayer('vtn-buildings-3d')) return;
     var style = ml.getStyle();
     if (!style || !style.sources) return;
@@ -388,6 +541,7 @@
           'fill-extrusion-vertical-gradient': true
         }
       }, firstLabelLayerId());
+      syncBuildingVisibility();
     } catch (e) {
       if (window.console) console.warn('[VTN] 3D buildings unavailable', e);
     }
@@ -496,7 +650,7 @@
   function trackPinClick(storyId, kind) {
     if (!VTN.metrics) return;
     var zoom = 0;
-    if (engine === 'maplibre' && ml) zoom = ml.getZoom();
+    if (hasGL()) zoom = ml.getZoom();
     else if (engine === 'leaflet' && leaflet) zoom = leaflet.getZoom();
     var meta = { zoom: zoom, engine: engine };
     if (kind === 'group') {
@@ -542,7 +696,7 @@
       var marker = markers[story.id];
       if (!marker) {
         var node = pinElement(story, groups[story.id]);
-        marker = new window.maplibregl.Marker({ element: node, anchor: 'bottom' })
+        marker = new glLibrary.Marker({ element: node, anchor: 'bottom' })
           .setLngLat([story.location.lng, story.location.lat])
           .addTo(ml);
         markers[story.id] = marker;
@@ -630,7 +784,8 @@
   }
 
   function render(forceFit) {
-    if (engine !== 'maplibre' || !ml) return;
+    if (!hasGL()) return;
+    syncHistory();
     if (ml.getSource('vtn-stories')) {
       ml.getSource('vtn-stories').setData(storiesGeoJson());
     }
@@ -666,7 +821,7 @@
   function focusStory(storyId) {
     var story = VTN.stories.get(storyId);
     if (!story || !story.location) return;
-    if (engine === 'maplibre' && ml) {
+    if (hasGL()) {
       var sheetOpen = VTN.sheet && VTN.sheet.isOpen();
       ml.flyTo({
         center: [story.location.lng, story.location.lat],
@@ -692,7 +847,7 @@
     var list = (ids || []).map(function (id) { return VTN.stories.get(id); })
       .filter(function (story) { return story && story.location; });
     if (!list.length) return;
-    if (engine === 'maplibre' && ml) {
+    if (hasGL()) {
       ml.fitBounds(boundsOf(list), {
         padding: { top: 168, bottom: 236, left: 54, right: 54 },
         duration: 700,
@@ -728,7 +883,7 @@
 
   function set3D(next) {
     is3D = !!next;
-    if (engine === 'maplibre' && ml) {
+    if (hasGL()) {
       if (is3D) {
         add3DBuildings();
         /* 3D 要有樓宇才成立：聚焦到最接近市鎮的故事，俯仰 55° 展示山形與樓群 */
@@ -747,6 +902,7 @@
           ml.easeTo({ pitch: 55, bearing: -18, duration: 950 });
         }
       } else {
+        syncBuildingVisibility();
         ml.easeTo({ pitch: 0, bearing: 0, duration: 750 });
       }
       el.classList.toggle('is-at-3d', is3D);
@@ -780,7 +936,7 @@
 
   function cycleScene() {
     var stops = sceneStops();
-    if (!stops.length || engine !== 'maplibre' || !ml) return null;
+    if (!stops.length || !hasGL()) return null;
     sceneIndex = (sceneIndex + 1) % stops.length;
     var stop = stops[sceneIndex];
     is3D = true;
@@ -810,7 +966,7 @@
 
   /* 問答與地圖共用同一個視口範圍，避免「來源數量」口徑分叉 */
   function currentBbox() {
-    var map = engine === 'maplibre' ? ml : engine === 'leaflet' ? leaflet : null;
+    var map = hasGL() ? ml : engine === 'leaflet' ? leaflet : null;
     if (!map) return null;
     var b = map.getBounds();
     return [[b.getWest(), b.getSouth()], [b.getEast(), b.getNorth()]];
@@ -836,15 +992,13 @@
 
   function fallbackToLeaflet(reason) {
     if (engine === 'leaflet' || engine === 'failed') return;
-    if (ml) {
-      try { ml.remove(); } catch (e) { /* ignore */ }
-      ml = null;
-    }
-    markers = {};
+    var version = ++attempt;
+    disposeGL();
     disable3D();
     engine = 'loading';
     loadCss(LEAFLET_CDN + 'leaflet.min.css', 'leaflet-css');
     loadScript(LEAFLET_CDN + 'leaflet.min.js', 'leaflet-js').then(function () {
+      if (version !== attempt) return;
       if (!window.L) throw new Error('leaflet-missing');
       engine = 'leaflet';
       leaflet = window.L.map(el, {
@@ -866,11 +1020,13 @@
       setNote('atlas.tiles.leaflet');
       renderLeaflet(true);
     }).catch(function () {
+      if (version !== attempt) return;
       engine = 'failed';
       disable3D();
       el.classList.add('is-failed');
       hideLoading();
       setNote('atlas.tiles.fallback');
+      updateHistoryNote();
     });
     if (window.console) console.warn('[VTN] map fallback:', reason);
   }
@@ -907,6 +1063,7 @@
     }
     toggleEmpty();
     updateViewportCount();
+    updateHistoryNote();
   }
 
   /* =========================================================================
@@ -926,15 +1083,15 @@
     var btn3d = byId('atlas3dBtn');
 
     if (zoomIn) zoomIn.addEventListener('click', function () {
-      if (engine === 'maplibre' && ml) ml.zoomIn({ duration: 380 });
+      if (hasGL()) ml.zoomIn({ duration: 380 });
       else if (engine === 'leaflet' && leaflet) leaflet.zoomIn();
     });
     if (zoomOut) zoomOut.addEventListener('click', function () {
-      if (engine === 'maplibre' && ml) ml.zoomOut({ duration: 380 });
+      if (hasGL()) ml.zoomOut({ duration: 380 });
       else if (engine === 'leaflet' && leaflet) leaflet.zoomOut();
     });
     if (reset) reset.addEventListener('click', function () {
-      if (engine === 'maplibre' && ml) {
+      if (hasGL()) {
         ml.easeTo({ pitch: is3D ? 48 : 0, bearing: is3D ? -14 : 0, duration: 600 });
         fitAll();
       } else if (engine === 'leaflet' && leaflet) {
@@ -944,6 +1101,10 @@
     if (btn3d) btn3d.addEventListener('click', function () { set3D(!is3D); });
     var sceneBtn = byId('atlasSceneBtn');
     if (sceneBtn) sceneBtn.addEventListener('click', function () { cycleScene(); });
+    VTN.mapSearch.init(byId('atlasLocate'), focusPlace, function () {
+      return mapConfig.geocoding && !mapboxFailed;
+    });
+    window.addEventListener('vtn:lang-changed', updateHistoryNote);
 
     if (window.matchMedia) {
       motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -956,8 +1117,18 @@
   function ensureVisible() {
     el = el || byId('vtnMap');
     if (!el) return;
-    if (engine === 'idle') { createMapLibre(); return; }
-    if (engine === 'maplibre' && ml) {
+    if (engine === 'idle') {
+      engine = 'loading';
+      var version = ++attempt;
+      VTN.api.request('/api/map/config', { timeout: 1600 }).catch(function () { return {}; })
+        .then(function (config) {
+          if (version !== attempt) return;
+          mapConfig = config || {};
+          createGL(mapConfig.mapbox && mapConfig.mapbox.token ? 'mapbox' : 'maplibre');
+        });
+      return;
+    }
+    if (hasGL()) {
       setTimeout(function () { try { ml.resize(); } catch (e) { /* ignore */ } }, 30);
     } else if (engine === 'leaflet' && leaflet) {
       setTimeout(function () { try { leaflet.invalidateSize(); } catch (e) { /* ignore */ } }, 30);
@@ -972,7 +1143,7 @@
     state.mode = (next && next.mode) || 'map';
     state.eraYear = next && next.eraYear !== undefined ? next.eraYear : null;
 
-    if (engine === 'maplibre' && ml) {
+    if (hasGL()) {
       if (previousMode !== state.mode) {
         setTimeout(function () { try { ml.resize(); } catch (e) { /* ignore */ } }, 30);
       }
@@ -981,16 +1152,31 @@
       renderLeaflet(false);
     } else {
       toggleEmpty();
+      if (!activeHistory) updateHistoryNote();
     }
   }
 
+  function focusPlace(center) {
+    if (hasGL()) {
+      ml.easeTo({ center: center, zoom: Math.max(ml.getZoom(), 13.8),
+        duration: prefersReducedMotion() ? 0 : 650 });
+      return true;
+    }
+    if (engine === 'leaflet' && leaflet) {
+      leaflet.setView([center[1], center[0]], Math.max(leaflet.getZoom(), 14));
+      return true;
+    }
+    return false;
+  }
+
   function reset() {
-    stopFuzzPulse();
-    if (ml) { try { ml.remove(); } catch (e) { /* ignore */ } }
+    attempt++;
+    disposeGL();
     if (leaflet) { try { leaflet.remove(); } catch (e) { /* ignore */ } }
-    ml = null;
     leaflet = null;
-    markers = {};
+    leafletLayer = null;
+    historyFailures = {};
+    mapboxFailed = false;
     engine = 'idle';
   }
 
@@ -1019,7 +1205,7 @@
       catch (e) { /* ignore */ }
     },
     debug: function () {
-      if (engine !== 'maplibre' || !ml) return { engine: engine };
+      if (!hasGL()) return { engine: engine };
       var c = ml.getCenter();
       var b = ml.getBounds();
       return {

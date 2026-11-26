@@ -18,15 +18,17 @@
   class Camera {
     constructor(options, leaflet) {
       this.leaflet = leaflet;
-      this.center = leaflet ? options.center.slice().reverse() : options.center.slice();
+      this.center = leaflet ? options.center.slice().reverse() :
+        Array.isArray(options.center) ? options.center.slice() : [options.center.lng, options.center.lat];
       this.zoom = options.zoom;
       this.pitch = options.pitch || 0;
       this.bearing = options.bearing || 0;
+      this.padding = options.padding || { top: 0, bottom: 0, left: 0, right: 0 };
       this.events = {};
       fixture.map = this;
     }
     on(event, listener) { (this.events[event] ||= []).push(listener); return this; }
-    emit(event) { (this.events[event] || []).forEach(listener => listener({})); }
+    emit(event, data = {}) { (this.events[event] || []).forEach(listener => listener(data)); }
     move(method, options) {
       fixture.calls.push(method);
       if (options.center) this.center = options.center.slice();
@@ -40,6 +42,7 @@
     getZoom() { return this.zoom; }
     getPitch() { return this.pitch; }
     getBearing() { return this.bearing; }
+    getPadding() { return this.padding; }
     getBounds() {
       const half = 0.12 * Math.pow(2, 12 - this.zoom);
       return bounds(this.center[0] - half, this.center[1] - half,
@@ -74,21 +77,27 @@
       pitch: fixture.map.pitch, bearing: fixture.map.bearing },
     calls: fixture.calls.slice()
   });
-  if (window.__cameraEngine === 'maplibre') {
+  if (window.__cameraEngine !== 'leaflet') {
     class MapDouble extends Camera {
       constructor(options) {
         super(options, false);
         this.container = options.container;
+        this.options = options;
+        this.config = options.config || {};
         this.sources = {};
         this.layers = {};
         setTimeout(() => this.emit('load'), 0);
       }
       addSource(id, definition) {
-        this.sources[id] = { data: definition.data, setData(data) { this.data = data; } };
+        this.sources[id] = { ...definition, setData(data) { this.data = data; } };
       }
       getSource(id) { return this.sources[id]; }
       addLayer(definition) { this.layers[definition.id] = definition; }
       getLayer(id) { return this.layers[id]; }
+      removeLayer(id) { delete this.layers[id]; }
+      removeSource(id) { delete this.sources[id]; }
+      getConfigProperty(group, key) { return this.config[group]?.[key]; }
+      setConfigProperty(group, key, value) { this.config[group][key] = value; }
       getStyle() { return { sources: {}, layers: Object.values(this.layers) }; }
       getContainer() { return this.container; }
       queryRenderedFeatures() { return []; }
@@ -102,6 +111,7 @@
       remove() { return this; }
     }
     window.maplibregl = { Map: MapDouble, Marker: MarkerDouble, supported: () => true };
+    if (window.__cameraEngine === 'mapbox') window.mapboxgl = window.maplibregl;
   } else {
     window.L = {
       map: (element, options) => new Camera(options, true),

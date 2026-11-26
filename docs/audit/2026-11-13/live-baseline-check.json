@@ -1,0 +1,23 @@
+{
+  "checked_at": "2026-11-13T07:46:37.163856+00:00",
+  "baseline": "0cc17019aaa44ec21b0bb3dc19040db1f77e41c0",
+  "health": {
+    "status": "ok",
+    "version": "2026.11.05",
+    "ai_status": "degraded",
+    "stt_ready": true,
+    "stt_reason": "",
+    "gemini_ready": false,
+    "llm_ready": false,
+    "storage_ready": true,
+    "storage_reason": "",
+    "storage_mode": "scoped",
+    "records_count": 0,
+    "ask_village_ready": true,
+    "story_count": 14,
+    "allowed_origins": 6
+  },
+  "story_count": 14,
+  "html_matches_baseline": true,
+  "live_html_sha256": "30c9d907669afe90ca5fff8e406125861a03ac9752733f78c6dd5232f26b303c"
+}

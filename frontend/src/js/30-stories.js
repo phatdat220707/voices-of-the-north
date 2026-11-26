@@ -16,8 +16,8 @@
   var U = VTN.util;
   var DATA = window.VTN_STORY_DATA || { stories: [], suggestedQuestions: [] };
 
-  /* 任務 1/2/4：純前端 Mock 注入（不改 data/stories.json）。
-     - 任務 1：前 2 則影片、第 3 則圖片；其餘仍走 resolveMedia 的 audio 降級。
+  /* 純前端示範資料（不改 data/stories.json）。
+     - 媒體示範僅套用到指定故事。
      - 任務 2：標記指定 ID 為 author='me'，供「我的故事」篩選。
      - 任務 4：注入整體與逐段轉錄置信度（演示用，確定性分佈）。 */
   function augmentMockData(data) {
@@ -29,8 +29,8 @@
     stories.forEach(function (s, i) {
       /* 相容性：資料若已含 mediaType/mediaUrl（未來正式錄入）則保留，不覆蓋 */
       if (!Object.prototype.hasOwnProperty.call(s, 'mediaType')) {
-        if (i === 0 || i === 1) { s.mediaType = 'video'; s.mediaUrl = s.mediaUrl || VIDEO; }
-        else if (i === 2) { s.mediaType = 'image'; s.mediaUrl = s.mediaUrl || IMG; }
+        if (s.id === 'YL-001') { s.mediaType = 'video'; s.mediaUrl = s.mediaUrl || VIDEO; }
+        else if (s.id === 'FL-003') { s.mediaType = 'image'; s.mediaUrl = s.mediaUrl || IMG; }
       }
       if (MINE.indexOf(s.id) !== -1 && s.author == null) s.author = 'me';
       /* null 是合法的「無數據」狀態，不可被 Mock 覆蓋 */
@@ -303,7 +303,7 @@
     var f = state.filters;
     if (state.onlyMine && story.author !== 'me') return false;
     /* 媒體類型與地點／年代／主題／關鍵詞同屬 AND 鏈，天然取交集 */
-    if (f.media && f.media !== 'all' && story.mediaType !== f.media) return false;
+    if (f.media && f.media !== 'all' && resolveMedia(story).type !== f.media) return false;
     if (f.type.length && f.type.indexOf(storyTypeOf(story)) === -1) return false;
     if (!matchesExceptType(story)) return false;
     return true;
@@ -467,11 +467,11 @@
 
     if (opts.playAt !== undefined && opts.playAt !== null) {
       var pm = resolveMedia(story);
-      if (pm.type === 'audio') {
-        VTN.audio.playStory(story.id, opts.playAt);
-        highlightSegment(opts.playAt);
-      } else if (VTN.media && VTN.media.open) {
+      if ((pm.type === 'video' || pm.type === 'image') && VTN.media && VTN.media.open) {
         VTN.media.open(story, opts.playAt);
+      } else {
+        if (story.audio) VTN.audio.playStory(story.id, opts.playAt);
+        highlightSegment(opts.playAt);
       }
     }
     return true;
@@ -654,36 +654,13 @@
     return tag;
   }
 
-  /* 萬能媒體區塊（二級入口 + 三級全屏 Overlay）的資料解析與降級邏輯。
-     - mediaType: 'video' | 'image'（未來由錄入寫入 data/stories.json；現由 augmentMockData 演示注入）
-     - mediaUrl: 對應媒體連結（缺省則回退 Mock 源）
-     - 無 mediaType 時回退為 audio（null 降級）
-     - 片源容錯：影片回退公開測試影片；圖片回退 cover / 內嵌佔位（均非真實長者影像） */
-  var MOCK_VIDEO = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
-
   function resolveMedia(story) {
-    var ty = story && story.mediaType;
-    if (ty !== 'video' && ty !== 'image') return { type: 'audio', url: null };
-    return { type: ty, url: mediaUrlOf(story, ty) };
-  }
-
-  function mockImageDataUri(story) {
-    var title = U.escapeHtml(storyTitle(story) || '示範圖片');
-    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="450">' +
-      '<rect width="100%" height="100%" fill="#1f3329"/>' +
-      '<text x="50%" y="48%" fill="#cfe8d8" font-size="34" font-family="sans-serif" ' +
-      'text-anchor="middle" dominant-baseline="middle">' + title + '</text>' +
-      '<text x="50%" y="60%" fill="#9bbfab" font-size="18" font-family="sans-serif" ' +
-      'text-anchor="middle" dominant-baseline="middle">示範圖片（非真實長者影像）</text>' +
-      '</svg>';
-    return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
-  }
-
-  function mediaUrlOf(story, type) {
-    var u = story && story.mediaUrl;
-    if (typeof u === 'string' && u.trim()) return u.trim();
-    if (type === 'image') return (story && story.cover) ? story.cover : mockImageDataUri(story);
-    return MOCK_VIDEO;
+    if (!story) return { type: 'none', url: null };
+    var type = story.mediaType;
+    var url = typeof story.mediaUrl === 'string' ? story.mediaUrl.trim() : '';
+    if (type === 'image' && !url) url = story.cover;
+    if ((type === 'video' || type === 'image') && url) return { type: type, url: url };
+    return { type: story.audio ? 'audio' : 'none', url: null };
   }
 
   /* 三級頁的影片跳秒、圖片高亮與音頻降級邏輯請見 33-media.js（renderUniversalMedia） */
@@ -703,7 +680,8 @@
     if (media.type === 'image') {
       thumb.appendChild(U.node('img', {
         class: 'story-media-launch__img', src: media.url,
-        alt: t('atlas.imageAlt', { title: storyTitle(story) }), loading: 'lazy'
+        alt: t(story.rolePlayed ? 'atlas.imageAlt' : 'atlas.storyImageAlt', { title: storyTitle(story) }),
+        loading: 'lazy'
       }));
     } else {
       thumb.appendChild(U.node('span', {
@@ -814,7 +792,9 @@
   function buildTranscript(story, seek) {
     var section = U.node('div', { class: 'story-sheet__section' });
     var head = U.node('div', { class: 'story-sheet__section-head' });
-    head.appendChild(U.node('h3', { class: 'story-sheet__section-title', text: t('story.transcriptHint') }));
+    head.appendChild(U.node('h3', {
+      class: 'story-sheet__section-title', text: t(seek ? 'story.transcriptHint' : 'story.transcript')
+    }));
     var segments = story.segments || [];
     var expanded = false;
     var toggle = null;
@@ -826,9 +806,9 @@
 
     var list = U.node('div', { class: 'segments' });
     segments.forEach(function (seg, index) {
-      var btn = U.node('button', { class: 'segment', type: 'button' });
-      if (index >= 2) btn.classList.add('is-collapsed');
-      btn.appendChild(U.node('span', { class: 'segment__t', text: U.fmtTime(seg.start) }));
+      var row = seek ? U.node('button', { class: 'segment', type: 'button' }) : U.node('div', { class: 'segment' });
+      if (index >= 2) row.classList.add('is-collapsed');
+      row.appendChild(U.node('span', { class: 'segment__t', text: U.fmtTime(seg.start) }));
       var low = typeof seg.confidence === 'number' && seg.confidence < 0.5;
       var textNode = U.node('span', { class: 'segment__text', text: seg.text });
       if (low) {
@@ -837,17 +817,19 @@
         textNode.setAttribute('data-conf-tip', t('conf.tooltip'));
         textNode.setAttribute('data-i18n-title', 'conf.tooltip');
       }
-      btn.appendChild(textNode);
-      btn.setAttribute('data-start', seg.start);
-      btn.addEventListener('click', function () {
-        state.playingSegment = index;
-        Array.prototype.forEach.call(list.querySelectorAll('.segment'), function (el) {
-          el.classList.toggle('is-playing', Math.abs(Number(el.getAttribute('data-start')) - Number(seg.start)) < 0.6);
+      row.appendChild(textNode);
+      row.setAttribute('data-start', seg.start);
+      if (seek) {
+        row.addEventListener('click', function () {
+          state.playingSegment = index;
+          Array.prototype.forEach.call(list.querySelectorAll('.segment'), function (el) {
+            el.classList.toggle('is-playing', Math.abs(Number(el.getAttribute('data-start')) - Number(seg.start)) < 0.6);
+          });
+          seek(seg.start);
+          if (low) VTN.ui.toast(t('conf.tooltip'), 'info');
         });
-        seek(seg.start);
-        if (low) VTN.ui.toast(t('conf.tooltip'), 'info');
-      });
-      list.appendChild(btn);
+      }
+      list.appendChild(row);
     });
     section.appendChild(list);
 
@@ -1002,7 +984,7 @@
     var media = resolveMedia(story);
     if (media.type === 'audio') {
       host.appendChild(audioPlayerNode(story));
-    } else {
+    } else if (media.type !== 'none') {
       host.appendChild(mediaLaunchNode(story, media));
     }
 
@@ -1020,9 +1002,13 @@
       host.appendChild(versionBox);
     }
 
-    /* 逐字稿：二級頁點時間戳 → 音頻跳播；三級頁由 VTN.media 自行接線 */
-    var audioSeek = function (sec) { VTN.audio.playStory(story.id, sec); };
-    host.appendChild(buildTranscript(story, audioSeek));
+    var seek = null;
+    if (story.audio) {
+      seek = function (sec) { VTN.audio.playStory(story.id, sec); };
+    } else if (media.type === 'video' && VTN.media) {
+      seek = function (sec) { VTN.media.open(story, sec); };
+    }
+    host.appendChild(buildTranscript(story, seek));
 
     var actions = U.node('div', { class: 'story-detail__actions' });
 
@@ -1055,7 +1041,7 @@
     withdrawBtn.innerHTML = '<i class="fa-solid fa-ban" aria-hidden="true"></i><span>' +
       U.escapeHtml(t('story.withdraw')) + '</span>';
     withdrawBtn.addEventListener('click', function () {
-      if (VTN.account) VTN.account.openWithdraw(story);
+      if (VTN.account) VTN.account.openWithdraw(story, { kind: 'story' });
     });
     actions.appendChild(withdrawBtn);
     host.appendChild(actions);
@@ -1400,6 +1386,18 @@
     }
   }
 
+  function refreshFromServer() {
+    if (!VTN.api || !VTN.api.stories) return Promise.resolve(false);
+    return VTN.api.stories().then(function (stories) {
+      if (!Array.isArray(stories)) return false;
+      DATA.stories = stories;
+      render();
+      return true;
+    }).catch(function () {
+      return false;
+    });
+  }
+
   function toggleOverview(force) {
     setMode(typeof force === 'boolean' ? (force ? 'map' : 'list') : (state.mode === 'list' ? 'map' : 'list'));
   }
@@ -1502,6 +1500,7 @@
     if (VTN.sheet) VTN.sheet.init();
 
     render();
+    refreshFromServer();
   }
 
   VTN.stories = {
@@ -1510,6 +1509,7 @@
     all: all,
     get: get,
     visible: visible,
+    refreshFromServer: refreshFromServer,
     filtered: filtered,
     inBbox: inBbox,
     queryContext: queryContext,

@@ -791,28 +791,52 @@
   /* =========================================================================
    * 5. 撤回
    * ======================================================================= */
-  function openWithdraw(item) {
-    var isRecord = !isStory(item);
-    VTN.ui.confirm({
+  function openWithdraw(item, options) {
+    // Records may contain segments too. Use the caller's entity kind and the
+    // published story's server-provided record link, never its text shape.
+    var kind = options && options.kind;
+    var recordId = kind === 'record' ? item.id : (kind === 'story' ? item.sourceRecordId : null);
+    return VTN.ui.confirm({
       titleKey: 'withdraw.title',
       messageKey: 'withdraw.message',
       noteKey: 'withdraw.note',
       confirmLabelKey: 'withdraw.confirm',
       danger: true
     }).then(function (ok) {
-      if (!ok) return;
-      VTN.store.withdrawn.add(item, '');
-      VTN.api.withdraw(item.id).catch(function () { /* 示範故事未必存在於伺服器 */ });
-      VTN.ui.toast(t('withdraw.done'), 'success');
-      if (VTN.recordings) VTN.recordings.renderAll();
-      if (VTN.stories) {
-        VTN.stories.render();
-        if (VTN.router && VTN.router.current().view === 'stories') {
-          VTN.router.go('stories', {}, { replace: true });
+      if (!ok) return false;
+      return VTN.api.withdraw(item.id).then(function (result) {
+        var localRecord = recordId && VTN.store.records.get(recordId);
+        if (localRecord) {
+          VTN.store.records.patch(recordId, {
+            reviewStatus: 'withdrawn',
+            scope: 'private',
+            withdrawnAt: result && result.withdrawnAt || new Date().toISOString(),
+            sync: 'synced'
+          }, { suppressSync: true });
         }
-      }
-      if (VTN.assistant) VTN.assistant.refresh();
-      if (isRecord) VTN.ui.toast(t('withdraw.keptNote'), 'info');
+        if (VTN.store.clearScopeOverride) {
+          // A built-in story can share an override key with a legacy local recording.
+          if (recordId || !VTN.store.records.get(item.id)) VTN.store.clearScopeOverride(item.id);
+          if (recordId && recordId !== item.id) VTN.store.clearScopeOverride(recordId);
+        }
+        VTN.store.withdrawn.add(item, '');
+        VTN.ui.toast(t('withdraw.done'), 'success');
+        if (VTN.recordings) VTN.recordings.renderAll();
+        if (VTN.stories) {
+          VTN.stories.render();
+          if (VTN.stories.refreshFromServer) VTN.stories.refreshFromServer();
+          if (VTN.router && VTN.router.current().view === 'stories') {
+            VTN.router.go('stories', {}, { replace: true });
+          }
+        }
+        if (VTN.assistant) VTN.assistant.refresh();
+        if (localRecord) VTN.ui.toast(t('withdraw.keptNote'), 'info');
+        return true;
+      }).catch(function () {
+        // A failed server withdrawal must not hide public content locally.
+        VTN.ui.toast(t('withdraw.failed'), 'error');
+        return false;
+      });
     });
   }
 

@@ -76,7 +76,7 @@
         <span class="cta-card__sub" data-i18n="home.ctaSub">首次錄音可先聽示範</span>
       </button>
 
-      <p class="me-section-title home-section-title" data-i18n="home.demoStories">示範故事</p>
+      <p class="me-section-title home-section-title" data-i18n="home.featuredStory">精選故事</p>
 
       <section class="featured" aria-labelledby="featuredTitle">
         <div class="featured__head">
@@ -223,6 +223,10 @@
               <input type="search" id="storySearch" autocomplete="off"
                      data-i18n-ph="atlas.searchPh" data-i18n-aria="stories.searchAria">
             </label>
+            <button type="button" class="atlas__filter" id="atlasLocate"
+                    data-i18n-aria="atlas.locate" data-i18n-title="atlas.locate">
+              <i class="fa-solid fa-crosshairs" aria-hidden="true"></i>
+            </button>
             <button type="button" class="atlas__filter" id="filterToggle"
                     aria-expanded="false" aria-controls="filterPanel"
                     data-i18n-aria="stories.filterAria">
@@ -281,6 +285,7 @@
               <span data-i18n="atlas.privacy">位置只顯示約 800 米模糊範圍，並非講者實際位置</span>
             </p>
             <p class="atlas__tiles" id="mapTilesNote"></p>
+            <p class="atlas__tiles" id="mapHistoryNote" role="status" hidden></p>
           </div>
         </div>
       </div>
@@ -365,8 +370,8 @@
             <i class="fa-solid fa-circle-info"></i>
           </span>
           <div class="disclosure-card__body">
-            <p class="disclosure-card__en" data-i18n="stories.disclosureEn">Role-played demo stories — created for hackathon demonstration purposes.</p>
-            <p class="disclosure-card__zh" data-i18n="stories.disclosure">全部為角色扮演示範故事，並非真實長者訪談。</p>
+            <p class="disclosure-card__en" data-i18n="stories.disclosureTitle">故事來源</p>
+            <p class="disclosure-card__zh" data-i18n="stories.disclosure">角色扮演故事為黑客松示範，並有清楚標示。真實訪談經授權後公開。</p>
           </div>
         </aside>
       </section>
@@ -609,7 +614,7 @@
         <h1 class="page-head__title" data-i18n="about.title">關於</h1>
       </div>
 
-      <p class="about-banner" data-i18n="about.banner">黑客松演示，含角色扮演故事，非真實長者訪談。所有示範內容均清楚標示，不會冒充真實口述歷史。</p>
+      <p class="about-banner" data-i18n="about.banner">本黑客松項目收錄經授權的口述歷史訪談，並清楚標示角色扮演示範故事。</p>
 
       <section class="about-section">
         <h2 data-i18n="about.positionTitle">項目定位</h2>

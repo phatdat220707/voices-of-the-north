@@ -1,0 +1,18 @@
+{
+  "revision": "6debeccca987913e5ec675ac8fd461afe1a12a19",
+  "role": "admin",
+  "queue_status": 200,
+  "queue_count": 1,
+  "queue_records": [
+    {
+      "id": "VERIFY-REVIEW-6DEBECC",
+      "reviewStatus": "submitted",
+      "owner": "verify-owner@school.demo"
+    }
+  ],
+  "admin_records_status": 200,
+  "admin_record_ids": [
+    "VERIFY-REVIEW-6DEBECC"
+  ],
+  "guest_record_status": 403
+}

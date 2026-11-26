@@ -250,10 +250,11 @@ html[data-font-size="xl"] { font-size: 22px; }
 .segment {
   display: block; width: 100%; padding: 11px 13px;
   border: 1.5px solid var(--hairline); border-radius: 14px;
-  background: transparent; text-align: left; font-family: inherit; cursor: pointer;
+  background: transparent; text-align: left; font-family: inherit;
   color: var(--ink-body);
 }
-.segment:hover { background: var(--sage-wash); border-color: var(--sage-line); }
+button.segment { cursor: pointer; }
+button.segment:hover { background: var(--sage-wash); border-color: var(--sage-line); }
 .segment.is-playing { border-color: var(--jade-strong); background: var(--sage-wash); }
 .segment__t {
   display: inline-block; margin-bottom: 3px; padding: 1px 8px;

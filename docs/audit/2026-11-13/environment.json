@@ -1,0 +1,17 @@
+{
+  "platform": "Windows-11-10.0.26300-SP0",
+  "python": "3.14.7 (tags/v3.14.7:823f032, Aug  5 2026, 10:51:32) [MSC v.1944 64 bit (AMD64)]",
+  "baseline": "0cc17019aaa44ec21b0bb3dc19040db1f77e41c0",
+  "packages": {
+    "fastapi": "0.142.2",
+    "starlette": "1.7.0",
+    "httpx": "0.28.1",
+    "pydantic": "2.13.5",
+    "uvicorn": "0.54.0",
+    "python-multipart": "0.0.32",
+    "requests": "2.34.2",
+    "google-auth": "2.61.0",
+    "google-cloud-speech": "2.41.0",
+    "google-genai": "2.29.0"
+  }
+}

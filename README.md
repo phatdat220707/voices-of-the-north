@@ -2,8 +2,8 @@
 
 以生成式 AI 保存香港鄉村長者口述歷史的示範平台：錄音 → 逐字稿 → 可核對的問答 → 四級私隱分享。示範資料以北區為主，另加赤柱、九龍城、大澳三則北區外故事，以及谷埔、荔枝窩兩則東北鄉郊故事；涵蓋粵語、華語（國語）與 English。
 
-> **黑客松示範聲明**：14 則故事全部標記為「角色扮演示範故事」，並非真實長者訪談。其中 `FL-014` 為 AI 編寫的 1994 年虛構示範，人物與事件均為虛構，用於展示 1990 年代至今的篩選結果。
-> 唯一真實音軌為 `frontend/assets/Demo Story.wav`（實測 46.7 秒）。介面會如實標示「未附音檔」「未能取得置信度」。
+> **故事來源與授權**：收錄 14 則角色扮演示範故事及 3 則已獲公開授權的真實訪談（`RL-001`、`RL-002`、`RL-003`）。示範故事 `FL-014` 為 AI 編寫的 1994 年虛構故事，用於展示 1990 年代至今的篩選結果。
+> 三則訪談各附 MP4 影片及 MP3 錄音；元朗示範故事附 `frontend/assets/Demo Story.wav`（實測 46.7 秒）。介面會標示「未附音檔」及「未能取得置信度」。
 
 ## 1. 目錄結構
 
@@ -125,7 +125,29 @@ python -m http.server 8421 --directory frontend
 | `VTN_RECORDS_TOKEN` | 空 | 舊版共用 token（相容用途） |
 | `GEMINI_API_KEY` | 空 | 有金鑰才啟用語言模型整理；只放伺服器 |
 
-前端不含任何 API 金鑰。
+服務端金鑰保留在環境變數。啟用 Mapbox 時，瀏覽器只會取得限定網站來源的 Mapbox 公開 token。
+
+### 4.1 可選 Mapbox 地圖
+
+- `VTN_MAPBOX_ENABLED=1` 和網域受限的 `VTN_MAPBOX_PUBLIC_TOKEN` 啟用 Mapbox Standard。設回 `0` 並重啟服務，新開頁面會使用 OpenFreeMap。需要立即停止已開頁面的用量時，還須在 Mapbox 撤銷使用中的 token。
+- `VTN_MAPBOX_GEOCODING_TOKEN` 用於伺服器端的香港地名查詢。使用獨立的最小權限 token。查詢只在提交時送出，採 Temporary 模式，結果不寫入儲存。粉嶺、上水及谷埔也可用示範座標定位。
+- `VTN_MAP_HISTORY` 是以來源影像年份為鍵的 JSON。以下以一個年份為例，請按實際瓦片資料填入覆蓋範圍及縮放等級。
+
+```json
+{"1963":{"tileset":"account.vtn-1963","bounds":[114.10,22.47,114.17,22.53],"minzoom":10,"maxzoom":17,"local":true}}
+```
+
+`bounds` 順序為西、南、東、北（WGS84）。年代檔 1960、1970、1980 分別對應 1963、1976、1982 影像。1950 檔會顯示影像未提供，1990+ 和全部年代使用現代底圖。年代切換保留相機。
+
+切片前先核對 [LandsD 正射影像的實際覆蓋](https://www.landsd.gov.hk/en/survey-mapping/mapping/aerial-photo-photogrammetric-products/digital-orthophoto.html) 及可使用範圍。以 [Raster MTS 流程](https://docs.mapbox.com/mapbox-tiling-service/examples/raster-mts-imagery/) 上傳獲准的 GeoTIFF，可用 `python tools/map_imagery.py recipe account/source --bands rgb` 產生 recipe。1976 影像只覆蓋部分地區，請依據實際配準後的切片選擇機位。若準備了獨立從原始影像切出的透明 PNG，按 `frontend/assets/map-history/YEAR/Z/X/Y.png` 放置 XYZ 瓦片並設 `local: true`，即可供 OpenFreeMap 或 MTS 失敗時使用。
+
+在 [Mapbox 用量後台](https://docs.mapbox.com/accounts/faq/can-i-set-up-a-cap-for-monthly-spending/) 按服務設用量告警。US$40 是團隊 US$50 預算的人工處置門檻。Mapbox 的用量告警不會自動停止計費。啟用前由帳戶負責人確認免費額度、監察與 token 停用安排。
+
+生成路演用圖時，在本機設置 `VTN_MAPBOX_ENABLED=1` 和 `VTN_MAPBOX_STATIC_TOKEN`。每年的樣式包含對應 MTS 栅格和 LandsD 署名，並使用 [Static Images 支援的樣式](https://docs.mapbox.com/api/maps/static-images/)。選擇三個年份都有影像的公開地點，命令以同一相機輸出四張可插入投影片的圖。
+
+```sh
+python tools/map_imagery.py evidence --center 114.15 22.43 --zoom 14 --output map-comparison --style-1963 account/style1963 --style-1976 account/style1976 --style-1982 account/style1982
+```
 
 ## 5. 私隱與安全
 
@@ -136,11 +158,12 @@ python -m http.server 8421 --directory frontend
 - **限流**：`/api/process` 10 次、`/api/auth/request-code` 5 次、`/api/ask-village` 30 次、其他 `/api/*` 90 次（每分鐘每 IP）。
 - **上傳**：分塊讀取，累計超過 10MB 立即中止，不把整個檔案讀入記憶體。
 - **地圖**：只顯示約 800 米模糊範圍，不設精確 GPS 標記；`private` 故事在地圖、聚合數字、圖例計數與搜尋中都不會出現（前端 store 與後端 `/api/stories` 雙重過濾）。
-- **地圖失敗**：MapLibre → Leaflet → 手繪示意圖三層回退；3D 不可用時按鈕會禁用並說明，不會靜默假裝成功。
+- **地圖失敗**：已啟用的 Mapbox → MapLibre / OpenFreeMap → Leaflet → 手繪示意圖。3D 不可用時按鈕會禁用並說明。
 
 ## 6. AI 行為紅線
 
 - 只根據**已授權**逐字稿回答，答案必附可點擊時間戳（`#stories?story=YL-001&t=17`）。
+- **檢索語言限制**：目前按逐字稿段落的人工關鍵詞及別名匹配，並非通用跨語言語意搜尋。英文輸入示例 `What was Yuen Long like when you were a child?` 由 `Yuen Long` 別名命中 `YL-001` 的 `00:00` 段落；伺服器及離線前端共用此語料。未收錄的英文別名可能無命中；答案保留逐字稿原語言，不自動翻譯。
 - 範圍外一律回覆「錄製的故事中未包含此資訊」，不引用外部知識。
 - 取不到逐詞置信度時回傳 `null`，介面顯示「未能取得置信度」，不造假數字。
 - AI 狀態（在線 / 降級 / 離線）在介面明示，不再靜默降級；降級時答案會標明「只用本機已授權語料產生」。
@@ -151,6 +174,7 @@ python -m http.server 8421 --directory frontend
 python tools/test_records_api.py    # 錄音 API 與權限（歷史腳本，與現行分享範圍契約待對齊）
 python tools/test_lab_api.py        # 實驗室 API
 python tools/audit_frontend.mjs     # 前端靜態檢查（需 node）
+python -X utf8 tools/verify/english_retrieval.py # 英文示例、中英文出處一致、範圍與拒答（需 node）
 ```
 
 評審修復的回歸腳本放在 `tools/verify/`（`douglas_review.py`、`waveform.py`、`bbox_api.py`、`external_waveforms.py`）。地圖／問答的視口、篩選、空集合、授權、拒答與離線降級另以 `python tools/verify/story_scope.py` 驗證；淺色主題、首次引導、現有故事／三語與歷史 Word 腳本以 `python tools/verify/light_onboarding.py` 驗證。測試使用隔離資料庫，不改動現有錄音。
